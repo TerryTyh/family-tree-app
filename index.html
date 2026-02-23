@@ -7,6 +7,9 @@
   <!-- Font Awesome -->
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
   
+  <!-- SheetJS Library for Excel handling -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
   <script>
     tailwind.config = {
       theme: {
@@ -288,9 +291,9 @@
                   </div>
                 </div>
                 <p class="text-xs text-gray-500">支持 JPG、PNG、GIF 格式，最大 5MB</p>
-              </div>
-              
-              <div class="space-y-2">
+          </div>
+          
+          <div class="space-y-2">
                 <label for="bio" class="block text-sm font-medium text-gray-700">生平简介</label>
                 <textarea id="bio" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm form-input-focus"></textarea>
               </div>
@@ -393,9 +396,7 @@
         </div>
         
         <div class="flex items-center space-x-3">
-          <button id="layoutBtn" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-100 focus:outline-none">
-            <i class="fa fa-th-large mr-1"></i> 布局
-          </button>
+
           <button id="checkRelationsBtn" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-100 focus:outline-none">
             <i class="fa fa-check-circle mr-1"></i> 检查关系
           </button>
@@ -454,55 +455,7 @@
     </div>
   </div>
 
-  <!-- 布局选择弹窗 -->
-  <div id="layoutModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div class="p-4 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg font-semibold">选择布局</h3>
-        <button id="closeLayoutModal" class="text-gray-500 hover:text-gray-700 focus:outline-none">
-          <i class="fa fa-times"></i>
-        </button>
-      </div>
-      
-      <div class="p-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div class="border border-gray-200 rounded-md p-3 cursor-pointer hover:border-primary layout-option" data-layout="horizontal">
-            <div class="aspect-w-16 aspect-h-9 bg-gray-100 rounded-md mb-2 flex items-center justify-center">
-              <i class="fa fa-arrows-h text-2xl text-primary"></i>
-            </div>
-            <p class="text-center font-medium">水平布局</p>
-          </div>
-          
-          <div class="border border-gray-200 rounded-md p-3 cursor-pointer hover:border-primary layout-option" data-layout="vertical">
-            <div class="aspect-w-9 aspect-h-16 bg-gray-100 rounded-md mb-2 flex items-center justify-center">
-              <i class="fa fa-arrows-v text-2xl text-primary"></i>
-            </div>
-            <p class="text-center font-medium">垂直布局</p>
-          </div>
-          
-          <div class="border border-gray-200 rounded-md p-3 cursor-pointer hover:border-primary layout-option" data-layout="radial">
-            <div class="aspect-w-1 aspect-h-1 bg-gray-100 rounded-md mb-2 flex items-center justify-center">
-              <i class="fa fa-circle-o text-2xl text-primary"></i>
-            </div>
-            <p class="text-center font-medium">放射状布局</p>
-          </div>
-          
-          <div class="border border-gray-200 rounded-md p-3 cursor-pointer hover:border-primary layout-option" data-layout="compact">
-            <div class="aspect-w-1 aspect-h-1 bg-gray-100 rounded-md mb-2 flex items-center justify-center">
-              <i class="fa fa-th text-2xl text-primary"></i>
-            </div>
-            <p class="text-center font-medium">紧凑布局</p>
-          </div>
-        </div>
-      </div>
-      
-      <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
-        <button id="applyLayoutBtn" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-accent focus:outline-none">
-          应用
-        </button>
-      </div>
-    </div>
-  </div>
+
 
   <!-- 导入/导出弹窗 -->
   <div id="importExportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
@@ -516,13 +469,13 @@
       
       <div class="p-4">
         <div id="importContent">
-          <p class="text-gray-600 mb-4">选择JSON格式的家族数据文件进行导入：</p>
-          <input type="file" id="importFile" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-accent">
+          <p class="text-gray-600 mb-4">选择Excel格式的家族数据文件进行导入：</p>
+          <input type="file" id="importFile" accept=".xlsx,.xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-accent">
           <div id="importError" class="mt-3 text-red-500 text-sm hidden"></div>
         </div>
         
         <div id="exportContent" class="hidden">
-          <p class="text-gray-600 mb-4">将您的家族数据导出为JSON文件：</p>
+          <p class="text-gray-600 mb-4">将您的家族数据导出为Excel文件：</p>
           <div class="mb-4">
             <label for="exportFilename" class="block text-sm font-medium text-gray-700 mb-1">文件名</label>
             <input type="text" id="exportFilename" value="family_tree_data" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm form-input-focus">
@@ -608,6 +561,9 @@
       initCanvas();
       setupEventListeners();
       
+      // 初始化照片编辑器
+      initPhotoEditor();
+      
       // 加载数据并在完成后更新UI
       loadFamilyData().then(() => {
         updateMembersList();
@@ -691,33 +647,7 @@
       document.getElementById('zoomInControl').addEventListener('click', zoomIn);
       document.getElementById('zoomOutControl').addEventListener('click', zoomOut);
       
-      // 布局按钮
-      document.getElementById('layoutBtn').addEventListener('click', function() {
-        document.getElementById('layoutModal').classList.remove('hidden');
-      });
-      
-      document.getElementById('closeLayoutModal').addEventListener('click', function() {
-        document.getElementById('layoutModal').classList.add('hidden');
-      });
-      
-      document.getElementById('applyLayoutBtn').addEventListener('click', function() {
-        const selectedLayout = document.querySelector('.layout-option.selected');
-        if (selectedLayout) {
-          currentLayout = selectedLayout.dataset.layout;
-          renderFamilyTree();
-        }
-        document.getElementById('layoutModal').classList.add('hidden');
-      });
-      
-      // 布局选项点击
-      document.querySelectorAll('.layout-option').forEach(option => {
-        option.addEventListener('click', function() {
-          document.querySelectorAll('.layout-option').forEach(opt => {
-            opt.classList.remove('selected', 'border-primary');
-          });
-          this.classList.add('selected', 'border-primary');
-        });
-      });
+
       
       // 关系检查按钮
       document.getElementById('checkRelationsBtn').addEventListener('click', checkRelations);
@@ -854,9 +784,6 @@
         photoPreview.classList.add('hidden');
         photoIcon.classList.remove('hidden');
       }
-      document.getElementById('fatherId').value = member.fatherId || '';
-      document.getElementById('motherId').value = member.motherId || '';
-      document.getElementById('spouseId').value = member.spouseIds && member.spouseIds.length > 0 ? member.spouseIds[0] : '';
       
       document.getElementById('deleteMemberBtn').classList.remove('hidden');
       
@@ -866,6 +793,13 @@
       
       // 更新关系选择框
       updateRelationsSelects();
+      
+      // 在更新选择框后重新设置家庭关系值
+      setTimeout(() => {
+        document.getElementById('fatherId').value = member.fatherId || '';
+        document.getElementById('motherId').value = member.motherId || '';
+        document.getElementById('spouseId').value = member.spouseIds && member.spouseIds.length > 0 ? member.spouseIds[0] : '';
+      }, 0);
     }
     
     // 显示成员详情面板
@@ -985,6 +919,19 @@
     }
     
     // 保存成员
+    // 照片编辑器全局变量
+    let editorState = {
+      isDraggingImage: false,
+      isDraggingCropBox: false,
+      startX: 0,
+      startY: 0,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+      cropBoxX: 0,
+      cropBoxY: 0
+    };
+    
     // 处理照片上传
     function handlePhotoUpload(e) {
       const file = e.target.files[0];
@@ -1006,14 +953,379 @@
       reader.onload = function(e) {
         const photoPreview = document.getElementById('photoPreview');
         const photoIcon = document.getElementById('photoIcon');
+        const editorImage = document.getElementById('editorImage');
         
+        // 显示预览
         photoPreview.src = e.target.result;
         photoPreview.classList.remove('hidden');
         photoIcon.classList.add('hidden');
+        
+        // 显示编辑器弹窗
+        const photoEditorModal = document.getElementById('photoEditorModal');
+        photoEditorModal.classList.remove('hidden');
+        
+        // 重置编辑器状态
+        editorState = {
+          isDraggingImage: false,
+          isDraggingCropBox: false,
+          startX: 0,
+          startY: 0,
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          cropBoxX: 0,
+          cropBoxY: 0
+        };
+        
+        // 设置图片源并等待加载完成
+        editorImage.onload = function() {
+          initPhotoEditorState();
+        };
+        editorImage.src = e.target.result;
       };
       
       reader.readAsDataURL(file);
     }
+    
+    // 初始化照片编辑器状态
+    function initPhotoEditorState() {
+      const editorImage = document.getElementById('editorImage');
+      const cropBox = document.getElementById('cropBox');
+      const container = document.querySelector('#photoEditorModal .relative');
+      const containerWidth = container.offsetWidth;
+      const containerHeight = container.offsetHeight;
+      
+      // 重置样式，避免冲突
+      editorImage.style.width = 'auto';
+      editorImage.style.height = 'auto';
+      editorImage.style.transform = 'none';
+      editorImage.style.left = '0px';
+      editorImage.style.top = '0px';
+      
+      // 调整图片大小以适应容器
+      const imgRatio = editorImage.width / editorImage.height;
+      const containerRatio = containerWidth / containerHeight;
+      
+      if (imgRatio > containerRatio) {
+        // 图片比容器宽，按宽度缩放
+        editorImage.style.width = '100%';
+        editorImage.style.height = 'auto';
+      } else {
+        // 图片比容器高，按高度缩放
+        editorImage.style.height = '100%';
+        editorImage.style.width = 'auto';
+      }
+      
+      // 居中图片
+      editorState.offsetX = (containerWidth - editorImage.width) / 2;
+      editorState.offsetY = (containerHeight - editorImage.height) / 2;
+      editorImage.style.left = editorState.offsetX + 'px';
+      editorImage.style.top = editorState.offsetY + 'px';
+      
+      // 调整裁剪框大小，使其高度与照片原始高度保持一致，同时保持等比例
+      // 计算裁剪框的目标高度（与容器高度相关，确保在容器内）
+      const targetCropHeight = containerHeight * 0.7; // 使用容器高度的70%
+      const targetCropWidth = targetCropHeight * (70 / 91); // 保持原始宽高比 70:91
+      
+      // 设置裁剪框大小
+      cropBox.style.width = targetCropWidth + 'px';
+      cropBox.style.height = targetCropHeight + 'px';
+      
+      // 初始化裁剪框位置（居中）
+      editorState.cropBoxX = (containerWidth - targetCropWidth) / 2;
+      editorState.cropBoxY = (containerHeight - targetCropHeight) / 2;
+      cropBox.style.left = editorState.cropBoxX + 'px';
+      cropBox.style.top = editorState.cropBoxY + 'px';
+      cropBox.style.transform = 'none'; // 移除初始的transform
+    }
+    
+    // 初始化照片编辑器事件监听器（只执行一次）
+    function initPhotoEditor() {
+      console.log('初始化照片编辑器事件监听器');
+      
+      // 检查元素是否存在
+      console.log('元素检查:', {
+        zoomInBtn: !!document.getElementById('zoomInBtn'),
+        zoomOutBtn: !!document.getElementById('zoomOutBtn')
+      });
+      
+      // 直接在DOM上绑定事件，使用事件委托，确保按钮存在时事件能被触发
+      document.addEventListener('click', function(e) {
+        // 放大按钮点击
+        if (e.target.closest('#zoomInBtn')) {
+          console.log('放大按钮被点击');
+          const editorImage = document.getElementById('editorImage');
+          if (editorImage) {
+            editorState.scale += 0.1;
+            console.log('放大，当前缩放比例:', editorState.scale);
+            // 确保变换生效
+            editorImage.style.transform = `scale(${editorState.scale})`;
+            editorImage.style.transformOrigin = 'center center';
+            console.log('应用的变换:', editorImage.style.transform);
+          }
+        }
+        
+        // 缩小按钮点击
+        if (e.target.closest('#zoomOutBtn')) {
+          console.log('缩小按钮被点击');
+          const editorImage = document.getElementById('editorImage');
+          const cropBox = document.getElementById('cropBox');
+          const container = document.querySelector('#photoEditorModal .relative');
+          
+          if (editorImage && cropBox && container) {
+            // 计算最小缩放比例：使照片高度与裁剪框高度一致
+            const minScale = cropBox.offsetHeight / container.offsetHeight;
+            console.log('缩小，当前缩放比例:', editorState.scale, '最小缩放比例:', minScale);
+            
+            if (editorState.scale > minScale) {
+              editorState.scale -= 0.1;
+              // 确保变换生效
+              editorImage.style.transform = `scale(${editorState.scale})`;
+              editorImage.style.transformOrigin = 'center center';
+              console.log('应用的变换:', editorImage.style.transform);
+            }
+          }
+        }
+      });
+      
+      console.log('缩放按钮事件监听器已通过事件委托绑定');
+      
+      // 拖动图片
+      document.addEventListener('mousedown', function(e) {
+        if (e.target.closest('#editorImage')) {
+          editorState.isDraggingImage = true;
+          const editorImage = document.getElementById('editorImage');
+          // 直接记录鼠标初始位置
+          editorState.startX = e.clientX;
+          editorState.startY = e.clientY;
+          // 记录图片初始位置
+          editorState.imgStartX = editorState.offsetX;
+          editorState.imgStartY = editorState.offsetY;
+        }
+      });
+      
+      // 拖动裁剪框
+      document.addEventListener('mousedown', function(e) {
+        if (e.target.closest('#cropBox')) {
+          e.stopPropagation(); // 阻止事件冒泡到图片
+          editorState.isDraggingCropBox = true;
+          const cropBox = document.getElementById('cropBox');
+          const container = document.querySelector('#photoEditorModal .relative');
+          const containerRect = container.getBoundingClientRect();
+          editorState.startX = e.clientX - (editorState.cropBoxX + containerRect.left);
+          editorState.startY = e.clientY - (editorState.cropBoxY + containerRect.top);
+        }
+      });
+      
+      // 鼠标移动事件
+      document.addEventListener('mousemove', function(e) {
+        const editorImage = document.getElementById('editorImage');
+        const cropBox = document.getElementById('cropBox');
+        
+        if (editorState.isDraggingImage && editorImage) {
+          // 计算鼠标移动的距离
+          const deltaX = e.clientX - editorState.startX;
+          const deltaY = e.clientY - editorState.startY;
+          
+          // 直接使用鼠标移动的距离，不考虑缩放比例
+          // 这样当用户向上拖动时，照片的top值会减小，可能变为负数
+          
+          // 计算新的图片位置
+          editorState.offsetX = editorState.imgStartX + deltaX;
+          editorState.offsetY = editorState.imgStartY + deltaY;
+          
+          // 更新图片位置
+          editorImage.style.left = editorState.offsetX + 'px';
+          editorImage.style.top = editorState.offsetY + 'px';
+        } else if (editorState.isDraggingCropBox && cropBox) {
+          const container = document.querySelector('#photoEditorModal .relative');
+          const containerRect = container.getBoundingClientRect();
+          const containerWidth = containerRect.width;
+          const containerHeight = containerRect.height;
+          
+          // 计算新位置，确保裁剪框在容器内
+          let newX = e.clientX - editorState.startX - containerRect.left;
+          let newY = e.clientY - editorState.startY - containerRect.top;
+          
+          // 边界检查
+          newX = Math.max(0, Math.min(newX, containerWidth - cropBox.offsetWidth));
+          newY = Math.max(0, Math.min(newY, containerHeight - cropBox.offsetHeight));
+          
+          // 更新裁剪框位置
+          cropBox.style.left = newX + 'px';
+          cropBox.style.top = newY + 'px';
+          cropBox.style.transform = 'none'; // 移除初始的transform
+          
+          // 更新裁剪框坐标
+          editorState.cropBoxX = newX;
+          editorState.cropBoxY = newY;
+        }
+      });
+      
+      // 鼠标释放事件
+      document.addEventListener('mouseup', function() {
+        editorState.isDraggingImage = false;
+        editorState.isDraggingCropBox = false;
+      });
+      
+      // 应用裁剪
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#applyCropBtn')) {
+          console.log('应用裁剪按钮被点击');
+          const container = document.querySelector('#photoEditorModal .relative');
+          const containerRect = container.getBoundingClientRect();
+          const editorImage = document.getElementById('editorImage');
+          const cropBox = document.getElementById('cropBox');
+          
+          // 计算裁剪区域
+          const cropX = editorState.cropBoxX;
+          const cropY = editorState.cropBoxY;
+          const cropWidth = cropBox.offsetWidth;
+          const cropHeight = cropBox.offsetHeight;
+          
+          // 创建canvas用于裁剪
+          const canvas = document.createElement('canvas');
+          canvas.width = cropWidth;
+          canvas.height = cropHeight;
+          const ctx = canvas.getContext('2d');
+          
+          // 创建临时图片处理原始数据
+          const tempImage = new Image();
+          tempImage.onload = function() {
+            try {
+              // 计算图片在容器中的缩放比例
+              let imgScale;
+              const imgRatio = tempImage.width / tempImage.height;
+              const containerRatio = container.offsetWidth / container.offsetHeight;
+              
+              if (imgRatio > containerRatio) {
+                imgScale = container.offsetWidth / tempImage.width;
+              } else {
+                imgScale = container.offsetHeight / tempImage.height;
+              }
+              
+              // 重新设计裁剪逻辑，考虑CSS transform: scale()的影响
+              console.log('开始裁剪，参数:', {
+                cropX: cropX,
+                cropY: cropY,
+                cropWidth: cropWidth,
+                cropHeight: cropHeight,
+                offsetX: editorState.offsetX,
+                offsetY: editorState.offsetY,
+                userScale: editorState.scale,
+                imgScale: imgScale,
+                tempImageWidth: tempImage.width,
+                tempImageHeight: tempImage.height
+              });
+              
+              // 核心思路：
+              // 1. 计算裁剪区域在容器中的位置
+              // 2. 计算照片在容器中的实际显示位置（考虑缩放和transform-origin）
+              // 3. 计算裁剪区域相对于照片的位置
+              // 4. 转换为原始照片上的位置
+              
+              // 1. 计算裁剪区域在容器中的位置
+              const cropRect = {
+                x: cropX,
+                y: cropY,
+                width: cropWidth,
+                height: cropHeight
+              };
+              console.log('裁剪区域在容器中的位置:', cropRect);
+              
+              // 2. 计算照片在容器中的实际显示位置
+              // 考虑CSS transform: scale()和transform-origin: center center的影响
+              const originalImgWidth = tempImage.width * imgScale;
+              const originalImgHeight = tempImage.height * imgScale;
+              const scaledImgWidth = originalImgWidth * editorState.scale;
+              const scaledImgHeight = originalImgHeight * editorState.scale;
+              
+              // 由于transform-origin: center center，图片的左上角位置会偏移
+              // 偏移量 = (缩放后的大小 - 原始大小) / 2
+              const offsetXDueToScale = (scaledImgWidth - originalImgWidth) / 2;
+              const offsetYDueToScale = (scaledImgHeight - originalImgHeight) / 2;
+              
+              // 照片在容器中的实际左上角位置
+              const imgLeft = editorState.offsetX - offsetXDueToScale;
+              const imgTop = editorState.offsetY - offsetYDueToScale;
+              console.log('照片在容器中的实际位置:', { imgLeft, imgTop });
+              console.log('缩放导致的偏移:', { offsetXDueToScale, offsetYDueToScale });
+              
+              // 3. 计算裁剪区域相对于照片的位置
+              // 照片坐标系：左上角为(0, 0)，向右为X轴正方向，向下为Y轴正方向
+              const relativeX = cropRect.x - imgLeft;
+              const relativeY = cropRect.y - imgTop;
+              console.log('裁剪区域相对于照片的位置:', { relativeX, relativeY });
+              
+              // 4. 计算总缩放比例
+              const totalScale = imgScale * editorState.scale;
+              console.log('总缩放比例:', totalScale);
+              
+              // 5. 计算在原始照片上的裁剪位置
+              const originalCropX = relativeX / totalScale;
+              const originalCropY = relativeY / totalScale;
+              const originalCropWidth = cropRect.width / totalScale;
+              const originalCropHeight = cropRect.height / totalScale;
+              console.log('在原始照片上的裁剪位置:', { originalCropX, originalCropY, originalCropWidth, originalCropHeight });
+              
+              // 6. 边界检查，确保裁剪区域在图片范围内
+              const finalCropX = Math.max(0, originalCropX);
+              const finalCropY = Math.max(0, originalCropY);
+              const finalCropWidth = Math.min(tempImage.width - finalCropX, originalCropWidth);
+              const finalCropHeight = Math.min(tempImage.height - finalCropY, originalCropHeight);
+              console.log('调整后的裁剪位置:', { finalCropX, finalCropY, finalCropWidth, finalCropHeight });
+              
+              // 7. 创建canvas并绘制裁剪后的图片
+              const cropCanvas = document.createElement('canvas');
+              cropCanvas.width = cropWidth;
+              cropCanvas.height = cropHeight;
+              const cropCtx = cropCanvas.getContext('2d');
+              
+              // 8. 绘制裁剪后的图片
+              cropCtx.drawImage(tempImage, finalCropX, finalCropY, finalCropWidth, finalCropHeight, 0, 0, cropWidth, cropHeight);
+              
+              // 9. 获取裁剪结果
+              const dataUrl = cropCanvas.toDataURL('image/jpeg');
+              console.log('裁剪完成，dataUrl长度:', dataUrl.length);
+              
+              if (dataUrl && dataUrl !== 'data:,') {
+                photoPreview.src = dataUrl;
+                console.log('裁剪成功，预览图已更新');
+              } else {
+                console.warn('裁剪失败，使用原始图片');
+                photoPreview.src = editorImage.src;
+              }
+              
+              // 隐藏编辑器弹窗
+              const photoEditorModal = document.getElementById('photoEditorModal');
+              photoEditorModal.classList.add('hidden');
+              
+              return;
+            } catch (error) {
+              console.error('裁剪失败:', error);
+              photoPreview.src = editorImage.src;
+              alert('裁剪过程中出现错误，已使用原始图片');
+            } finally {
+              // 隐藏编辑器弹窗
+              const photoEditorModal = document.getElementById('photoEditorModal');
+              photoEditorModal.classList.add('hidden');
+            }
+          };
+          tempImage.src = editorImage.src;
+        }
+      });
+      
+      // 关闭编辑器弹窗
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#closeEditorModal')) {
+          console.log('关闭编辑器弹窗');
+          const photoEditorModal = document.getElementById('photoEditorModal');
+          photoEditorModal.classList.add('hidden');
+        }
+      });
+    }
+    
+
     
     function saveMember() {
       const formData = {
@@ -1403,10 +1715,10 @@
       if (!connectedComponents || connectedComponents.length === 0) return;
       
       // 节点大小和间距
-      const nodeWidth = 120;
-      const nodeHeight = 80;
+      const nodeWidth = 100;
+      const nodeHeight = 160;
       const horizontalSpacing = 200;
-      const verticalSpacing = 150;
+      const verticalSpacing = 250;
       const componentSpacing = 300; // 不同家族组之间的间距
       
       let totalWidth = 0;
@@ -1471,10 +1783,10 @@
       if (!connectedComponents || connectedComponents.length === 0) return;
       
       // 节点大小和间距
-      const nodeWidth = 120;
-      const nodeHeight = 80;
+      const nodeWidth = 100;
+      const nodeHeight = 160;
       const horizontalSpacing = 200;
-      const verticalSpacing = 150;
+      const verticalSpacing = 250;
       const componentSpacing = 200; // 不同家族组之间的间距
       
       let totalHeight = 0;
@@ -1539,8 +1851,8 @@
       if (!connectedComponents || connectedComponents.length === 0) return;
       
       // 节点大小和间距
-      const nodeWidth = 100;
-      const nodeHeight = 70;
+      const nodeWidth = 80;
+      const nodeHeight = 140;
       const radiusIncrement = 180;
       const componentRadius = 400; // 不同家族组之间的半径
       
@@ -1634,10 +1946,10 @@
       if (!connectedComponents || connectedComponents.length === 0) return;
       
       // 节点大小和间距
-      const nodeWidth = 100;
-      const nodeHeight = 70;
+      const nodeWidth = 80;
+      const nodeHeight = 140;
       const horizontalSpacing = 150;
-      const verticalSpacing = 100;
+      const verticalSpacing = 220;
       const componentSpacing = 250; // 不同家族组之间的间距
       
       let totalWidth = 0;
@@ -1963,49 +2275,47 @@
           // 保存当前状态
           ctx.save();
           
-          // 创建圆形裁剪区域
+          // 创建长方形裁剪区域（高大于宽）
+          const photoWidth = node.width * 0.7;
+          const photoHeight = photoWidth * 1.3; // 高度大于宽度
+          const photoX = node.x + node.width / 2 - photoWidth / 2;
+          const photoY = node.y + 10;
+          
           ctx.beginPath();
-          ctx.arc(
-            node.x + node.width / 2,
-            node.y + 25,
-            20,
-            0,
-            Math.PI * 2
-          );
+          ctx.roundRect(photoX, photoY, photoWidth, photoHeight, 4);
           ctx.clip();
           
           // 绘制图片
           ctx.drawImage(
             img,
-            node.x + node.width / 2 - 20,
-            node.y + 5,
-            40,
-            40
+            photoX,
+            photoY,
+            photoWidth,
+            photoHeight
           );
           
           // 恢复状态
           ctx.restore();
         } else {
           // 绘制默认图标
+          const iconWidth = node.width * 0.7;
+          const iconHeight = iconWidth * 1.3; // 高度大于宽度
+          const iconX = node.x + node.width / 2 - iconWidth / 2;
+          const iconY = node.y + 10;
+          
           ctx.fillStyle = member.gender === 'male' ? '#8B4513' : '#CD5C5C';
           ctx.beginPath();
-          ctx.arc(
-            node.x + node.width / 2,
-            node.y + 25,
-            20,
-            0,
-            Math.PI * 2
-          );
+          ctx.roundRect(iconX, iconY, iconWidth, iconHeight, 4);
           ctx.fill();
           
           ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 20px Arial';
+          ctx.font = 'bold ' + (iconWidth * 0.4) + 'px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(
             member.gender === 'male' ? '👨' : '👩',
             node.x + node.width / 2,
-            node.y + 25
+            node.y + 10 + iconHeight / 2
           );
         }
         
@@ -2017,7 +2327,7 @@
         ctx.fillText(
           member.name,
           node.x + node.width / 2,
-          node.y + 55
+          node.y + 105
         );
         
         // 绘制出生日期
@@ -2036,7 +2346,7 @@
           ctx.fillText(
             birthYear + deathYear,
             node.x + node.width / 2,
-            node.y + 70
+            node.y + 125
           );
         }
       });
@@ -2529,7 +2839,40 @@
       
       reader.onload = function(e) {
         try {
-          const importedData = JSON.parse(e.target.result);
+          // 读取Excel文件
+          const workbook = XLSX.read(e.target.result, { type: 'binary' });
+          
+          // 获取第一个工作表
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          
+          // 将工作表转换为JSON
+          const membersData = XLSX.utils.sheet_to_json(worksheet);
+          
+          // 处理数据格式，将逗号分隔的字符串转换回数组
+          const processedMembers = membersData.map(member => {
+            // 处理spouseIds
+            if (member.spouseIds && typeof member.spouseIds === 'string') {
+              member.spouseIds = member.spouseIds.split(',').filter(id => id.trim() !== '');
+            } else {
+              member.spouseIds = [];
+            }
+            
+            // 处理childrenIds
+            if (member.childrenIds && typeof member.childrenIds === 'string') {
+              member.childrenIds = member.childrenIds.split(',').filter(id => id.trim() !== '');
+            } else {
+              member.childrenIds = [];
+            }
+            
+            return member;
+          });
+          
+          // 构建家族数据
+          const importedData = {
+            members: processedMembers,
+            rootMemberId: processedMembers.length > 0 ? processedMembers[0].id : null,
+            lastUpdated: new Date().toISOString()
+          };
           
           // 验证数据格式
           if (!importedData.members || !Array.isArray(importedData.members)) {
@@ -2559,23 +2902,72 @@
         }
       };
       
-      reader.readAsText(file);
+      reader.readAsBinaryString(file);
     }
     
     // 导出家族数据
     function exportFamilyData() {
       const filename = document.getElementById('exportFilename').value || 'family_tree_data';
       
-      // 创建数据URL
-      const dataStr = JSON.stringify(familyData, null, 2);
-      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+      // 准备导出数据
+      const exportData = familyData.members.map(member => {
+        return {
+          id: member.id,
+          name: member.name,
+          gender: member.gender,
+          birthDate: member.birthDate || '',
+          deathDate: member.deathDate || '',
+          bio: member.bio || '',
+          photo: member.photo || '',
+          fatherId: member.fatherId || '',
+          motherId: member.motherId || '',
+          spouseIds: member.spouseIds ? member.spouseIds.join(',') : '',
+          childrenIds: member.childrenIds ? member.childrenIds.join(',') : ''
+        };
+      });
       
-      // 创建下载链接
-      const exportLink = document.createElement('a');
-      exportLink.setAttribute('href', dataUri);
-      exportLink.setAttribute('download', filename + '.json');
-      exportLink.click();
+      // 创建工作表
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // 创建工作簿
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '家族成员');
+      
+      // 导出为Excel文件
+      XLSX.writeFile(workbook, filename + '.xlsx');
     }
   </script>
+
+  <!-- 照片编辑器弹窗 -->
+  <div id="photoEditorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-4">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">照片编辑</h3>
+        <button id="closeEditorModal" class="text-gray-500 hover:text-gray-700 focus:outline-none">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="relative border border-gray-300 rounded-md overflow-hidden" style="width: 300px; height: 390px; margin: 0 auto;">
+        <img id="editorImage" src="" alt="编辑照片" class="absolute top-0 left-0 w-auto h-auto">
+        <div id="cropOverlay" class="absolute inset-0 bg-black bg-opacity-30 pointer-events-none">
+          <!-- 裁剪框 -->
+          <div id="cropBox" class="absolute border-2 border-white cursor-move" style="width: 70px; height: 91px; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
+        </div>
+      </div>
+      <div class="flex justify-between mt-4">
+        <div class="flex space-x-2">
+          <button id="zoomInBtn" class="px-2 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
+            <i class="fa fa-search-plus"></i> 放大
+          </button>
+          <button id="zoomOutBtn" class="px-2 py-1 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
+            <i class="fa fa-search-minus"></i> 缩小
+          </button>
+        </div>
+        <button id="applyCropBtn" class="px-3 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-accent focus:outline-none">
+          应用
+        </button>
+      </div>
+    </div>
+  </div>
 
 </body></html>
