@@ -454,6 +454,27 @@
       </div>
     </div>
   </div>
+  
+  <!-- 头像放大弹窗 -->
+  <div id="avatarModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
+    <!-- 图片容器 -->
+    <div class="relative max-w-3xl max-h-[90vh]">
+      <img id="avatarModalImage" src="" alt="放大头像" class="max-w-full max-h-[90vh] object-contain rounded-lg" style="transform: scale(1); transform-origin: center center; transition: transform 0.2s ease;">
+    </div>
+    
+    <!-- 缩放控制按钮 - 放在屏幕最下方 -->
+    <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-4 z-10 bg-black bg-opacity-50 rounded-full px-4 py-2">
+      <button id="zoomOutAvatar" class="bg-white bg-opacity-20 hover:bg-opacity-40 rounded-full p-2 text-white focus:outline-none transition-all duration-200">
+        <i class="fa fa-search-minus"></i>
+      </button>
+      <button id="resetZoomAvatar" class="bg-white bg-opacity-20 hover:bg-opacity-40 rounded-full p-2 text-white focus:outline-none transition-all duration-200">
+        <i class="fa fa-refresh"></i>
+      </button>
+      <button id="zoomInAvatar" class="bg-white bg-opacity-20 hover:bg-opacity-40 rounded-full p-2 text-white focus:outline-none transition-all duration-200">
+        <i class="fa fa-search-plus"></i>
+      </button>
+    </div>
+  </div>
 
 
 
@@ -812,7 +833,7 @@
       // 构建详情HTML
       let detailsHTML = `
         <div class="flex flex-col items-center mb-6">
-          <div class="w-24 h-24 rounded-full overflow-hidden mb-3 border-2 border-primary">
+          <div class="w-24 h-24 rounded-full overflow-hidden mb-3 border-2 border-primary cursor-pointer ${member.photo ? 'member-avatar' : ''}" data-member-id="${member.id}">
             <img src="${member.photo || 'https://p26-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/1877fbaeebdc492193e52a9443a71588~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=2026022107294392EA892CE8AD3175A76F&rrcfp=f06b921b&x-expires=1774222213&x-signature=nl3mjnH872EmFBEJPocudhhTLm4%3D'}" 
                  alt="${member.name}" class="w-full h-full object-cover">
           </div>
@@ -1321,6 +1342,96 @@
           console.log('关闭编辑器弹窗');
           const photoEditorModal = document.getElementById('photoEditorModal');
           photoEditorModal.classList.add('hidden');
+        }
+      });
+      
+      // 成员头像点击事件 - 显示放大头像
+      // 使用事件委托，确保能处理动态生成的元素
+      document.addEventListener('click', function(e) {
+        // 检查是否点击了成员头像容器或其中的图片
+        const avatarContainer = e.target.closest('[data-member-id]');
+        if (avatarContainer && avatarContainer.classList.contains('member-avatar')) {
+          const memberId = avatarContainer.dataset.memberId;
+          const member = familyData.members.find(m => m.id === memberId);
+          
+          console.log('点击了成员头像:', { memberId, member: member ? member.name : '未找到' });
+          
+          if (member && member.photo) {
+            const avatarModal = document.getElementById('avatarModal');
+            const avatarModalImage = document.getElementById('avatarModalImage');
+            
+            if (avatarModal && avatarModalImage) {
+              // 设置弹窗图片源
+              avatarModalImage.src = member.photo;
+              avatarModalImage.alt = member.name;
+              
+              // 显示弹窗
+              avatarModal.classList.remove('hidden');
+              console.log('显示头像弹窗:', member.photo);
+            } else {
+              console.error('头像弹窗元素未找到');
+            }
+          } else if (member && !member.photo) {
+            console.log('成员没有照片，不显示弹窗');
+          } else {
+            console.error('未找到成员:', memberId);
+          }
+        }
+      });
+      
+      // 头像弹窗缩放功能
+      let avatarScale = 1;
+      const maxAvatarScale = 3; // 最大缩放比例
+      const minAvatarScale = 1; // 最小缩放比例（默认大小）
+      
+      // 放大按钮点击事件
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#zoomInAvatar')) {
+          if (avatarScale < maxAvatarScale) {
+            avatarScale += 0.2;
+            updateAvatarScale();
+          }
+        }
+      });
+      
+      // 缩小按钮点击事件
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#zoomOutAvatar')) {
+          if (avatarScale > minAvatarScale) {
+            avatarScale -= 0.2;
+            updateAvatarScale();
+          }
+        }
+      });
+      
+      // 重置缩放按钮点击事件
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#resetZoomAvatar')) {
+          avatarScale = 1;
+          updateAvatarScale();
+        }
+      });
+      
+      // 更新头像缩放
+      function updateAvatarScale() {
+        const avatarImage = document.getElementById('avatarModalImage');
+        if (avatarImage) {
+          avatarImage.style.transform = `scale(${avatarScale})`;
+          console.log('更新头像缩放:', avatarScale);
+        }
+      }
+      
+      // 关闭头像放大弹窗
+      document.addEventListener('click', function(e) {
+        // 点击蒙层（非图片和非缩放按钮）时关闭弹窗
+        if (e.target.closest('#avatarModal') && !e.target.closest('#avatarModalImage') && !e.target.closest('#zoomInAvatar') && !e.target.closest('#zoomOutAvatar') && !e.target.closest('#resetZoomAvatar')) {
+          const avatarModal = document.getElementById('avatarModal');
+          if (avatarModal) {
+            avatarModal.classList.add('hidden');
+            // 重置缩放比例
+            avatarScale = 1;
+            updateAvatarScale();
+          }
         }
       });
     }
