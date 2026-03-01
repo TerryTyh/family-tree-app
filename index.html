@@ -10,6 +10,9 @@
   <!-- SheetJS Library for Excel handling -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
   <script>
     tailwind.config = {
       theme: {
@@ -527,6 +530,11 @@
 
   <script>
     // 全局变量
+    // Supabase配置
+    const supabaseUrl = 'https://ipnslrdmrbnwkmulwduj.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwbnNscmRtcmJud2ttdWx3ZHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjkzMjYsImV4cCI6MjA4Nzk0NTMyNn0.6y9rH9Q9W9YhH5fG1Q2f1f2f3f4f5f6f7f8f9f0f1f2f3f4f5f6f7f8f9f0';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
     let familyData = {
       members: [],
       rootMemberId: null,
@@ -1559,35 +1567,74 @@
       }
       
       try {
-        let response;
+        // 准备成员数据（移除关系字段，因为关系存储在单独的表中）
+        const memberData = {
+          id: formData.id,
+          name: formData.name,
+          gender: formData.gender,
+          birthDate: formData.birthDate,
+          birthTime: formData.birthTime,
+          deathDate: formData.deathDate,
+          photo: formData.photo,
+          bio: formData.bio,
+          fatherId: formData.fatherId,
+          motherId: formData.motherId
+        };
+        
+        let result;
         if (currentEditMode === 'add') {
           // 添加新成员
-          response = await fetch('http://localhost:5001/api/members', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-          });
+          const { data, error } = await supabase
+            .from('members')
+            .insert(memberData)
+            .select();
+          
+          if (error) {
+            throw error;
+          }
+          
+          result = data[0];
         } else {
           // 更新现有成员
-          const memberId = formData.id;
-          response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-          });
+          const { data, error } = await supabase
+            .from('members')
+            .update(memberData)
+            .eq('id', formData.id)
+            .select();
+          
+          if (error) {
+            throw error;
+          }
+          
+          result = data[0];
         }
         
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
-        }
-        
-        const result = await response.json();
         console.log('保存结果:', result);
+        
+        // 处理配偶关系
+        if (formData.spouseIds && formData.spouseIds.length > 0) {
+          // 先删除现有的配偶关系
+          await supabase
+            .from('spouses')
+            .delete()
+            .eq('memberId', formData.id);
+          
+          // 添加新的配偶关系
+          for (const spouseId of formData.spouseIds) {
+            await supabase
+              .from('spouses')
+              .insert({
+                memberId: formData.id,
+                spouseId: spouseId
+              });
+          }
+        } else {
+          // 删除所有配偶关系
+          await supabase
+            .from('spouses')
+            .delete()
+            .eq('memberId', formData.id);
+        }
         
         // 重新加载数据
         await loadFamilyData();
@@ -1621,21 +1668,30 @@
       }
       
       try {
-        // 通过API删除成员
-        const response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+        // 删除相关的配偶关系
+        await supabase
+          .from('spouses')
+          .delete()
+          .or(`memberId.eq.${memberId},spouseId.eq.${memberId}`);
         
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
+        // 删除相关的子女关系
+        await supabase
+          .from('children')
+          .delete()
+          .or(`parentId.eq.${memberId},childId.eq.${memberId}`);
+        
+        // 删除成员本身
+        const { data, error } = await supabase
+          .from('members')
+          .delete()
+          .eq('id', memberId)
+          .select();
+        
+        if (error) {
+          throw error;
         }
         
-        const result = await response.json();
-        console.log('删除结果:', result);
+        console.log('删除结果:', data);
         
         // 重新加载数据
         await loadFamilyData();
@@ -2857,7 +2913,7 @@
         console.log('API返回结果:', data);
         
         // 检查返回数据是否完整
-        if (!data.full || !data.year || !data.month || !data.day || !data.time) {
+        if (!data.year || !data.month || !data.day || !data.time) {
           throw new Error('API返回的数据不完整');
         }
         
@@ -2938,42 +2994,70 @@
     
     // 从API加载家族数据
     function loadFamilyData() {
-      return new Promise((resolve, reject) => {
-        // 从API获取数据
-        fetch('http://localhost:5001/api/members')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`API调用失败: ${response.status}`);
-            }
-            return response.json();
-          })
-          .then(data => {
-            console.log('从API获取的成员数据:', data);
-            
-            // 处理数据格式
-            familyData = {
-              members: data.members || [],
-              rootMemberId: data.members.length > 0 ? data.members[0].id : null,
-              lastUpdated: new Date().toISOString()
-            };
-            
-            // 如果有数据，隐藏初始提示并渲染家族树
-            if (familyData.members.length > 0) {
-              document.getElementById('initialPrompt').classList.add('hidden');
-              renderFamilyTree();
-            }
-            resolve(familyData);
-          })
-          .catch(error => {
-            console.error('从API加载数据失败:', error);
-            // 失败时使用默认数据
-            familyData = {
-              members: [],
-              rootMemberId: null,
-              lastUpdated: new Date().toISOString()
-            };
-            resolve(familyData);
-          });
+      return new Promise(async (resolve, reject) => {
+        try {
+          // 从Supabase获取成员数据
+          const { data: membersData, error: membersError } = await supabase
+            .from('members')
+            .select('*');
+          
+          if (membersError) {
+            throw membersError;
+          }
+          
+          console.log('从Supabase获取的成员数据:', membersData);
+          
+          // 从Supabase获取配偶关系数据
+          const { data: spousesData, error: spousesError } = await supabase
+            .from('spouses')
+            .select('*');
+          
+          // 从Supabase获取子女关系数据
+          const { data: childrenData, error: childrenError } = await supabase
+            .from('children')
+            .select('*');
+          
+          // 处理数据格式
+          familyData = {
+            members: membersData || [],
+            rootMemberId: membersData && membersData.length > 0 ? membersData[0].id : null,
+            lastUpdated: new Date().toISOString()
+          };
+          
+          // 处理配偶关系
+          if (spousesData) {
+            familyData.members.forEach(member => {
+              member.spouseIds = spousesData
+                .filter(spouse => spouse.memberId === member.id)
+                .map(spouse => spouse.spouseId);
+            });
+          }
+          
+          // 处理子女关系
+          if (childrenData) {
+            familyData.members.forEach(member => {
+              member.childrenIds = childrenData
+                .filter(child => child.parentId === member.id)
+                .map(child => child.childId);
+            });
+          }
+          
+          // 如果有数据，隐藏初始提示并渲染家族树
+          if (familyData.members.length > 0) {
+            document.getElementById('initialPrompt').classList.add('hidden');
+            renderFamilyTree();
+          }
+          resolve(familyData);
+        } catch (error) {
+          console.error('从Supabase加载数据失败:', error);
+          // 失败时使用默认数据
+          familyData = {
+            members: [],
+            rootMemberId: null,
+            lastUpdated: new Date().toISOString()
+          };
+          resolve(familyData);
+        }
       });
     }
     
@@ -3094,34 +3178,65 @@
             }
           });
           
-          // 构建家族数据
-          const importedData = {
-            members: processedMembers,
-            rootMemberId: processedMembers.length > 0 ? processedMembers[0].id : null,
-            lastUpdated: new Date().toISOString()
-          };
-          
           // 验证数据格式
-          if (!importedData.members || !Array.isArray(importedData.members)) {
+          if (!processedMembers || !Array.isArray(processedMembers)) {
             throw new Error('无效的数据格式');
           }
           
-          // 更新数据
-          familyData = importedData;
-          familyData.lastUpdated = new Date().toISOString();
-          
-          // 为每个成员计算生辰八字
-          for (const member of familyData.members) {
+          // 为每个成员计算生辰八字并保存到Supabase
+          for (const member of processedMembers) {
             if (member.birthDate) {
               const baZi = await calculateBaZi(member.birthDate, member.birthTime);
               if (baZi) {
                 member.baZi = baZi;
               }
             }
+            
+            // 准备成员数据
+            const memberData = {
+              id: member.id,
+              name: member.name,
+              gender: member.gender,
+              birthDate: member.birthDate,
+              birthTime: member.birthTime,
+              deathDate: member.deathDate,
+              photo: member.photo,
+              bio: member.bio,
+              fatherId: member.fatherId,
+              motherId: member.motherId
+            };
+            
+            // 保存成员到Supabase
+            const { data, error } = await supabase
+              .from('members')
+              .insert(memberData)
+              .select();
+            
+            if (error) {
+              console.error('保存成员失败:', error);
+              importResults.failed++;
+              importResults.errors.push({
+                name: member.name,
+                errors: [error.message]
+              });
+              continue;
+            }
+            
+            // 保存配偶关系
+            if (member.spouseIds && member.spouseIds.length > 0) {
+              for (const spouseId of member.spouseIds) {
+                await supabase
+                  .from('spouses')
+                  .insert({
+                    memberId: member.id,
+                    spouseId: spouseId
+                  });
+              }
+            }
           }
           
-          // 保存数据
-          saveFamilyData();
+          // 重新加载数据
+          await loadFamilyData();
           updateMembersList();
           updateRelationsSelects();
           
