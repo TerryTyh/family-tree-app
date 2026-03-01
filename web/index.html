@@ -269,6 +269,11 @@
                 </div>
                 
                 <div class="space-y-2">
+                  <label for="birthTime" class="block text-sm font-medium text-gray-700">出生时间</label>
+                  <input type="time" id="birthTime" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm form-input-focus">
+                </div>
+                
+                <div class="space-y-2">
                   <label for="deathDate" class="block text-sm font-medium text-gray-700">去世日期</label>
                   <input type="date" id="deathDate" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm form-input-focus">
                 </div>
@@ -492,6 +497,11 @@
         <div id="importContent">
           <p class="text-gray-600 mb-4">选择Excel格式的家族数据文件进行导入：</p>
           <input type="file" id="importFile" accept=".xlsx,.xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-accent">
+          <div class="mt-3">
+            <button id="downloadTemplateBtn" class="text-primary hover:text-accent text-sm font-medium">
+              <i class="fa fa-download mr-1"></i> 下载导入模板
+            </button>
+          </div>
           <div id="importError" class="mt-3 text-red-500 text-sm hidden"></div>
         </div>
         
@@ -645,7 +655,13 @@
       document.getElementById('photoUpload').addEventListener('change', handlePhotoUpload);
       
       // 保存成员
-      document.getElementById('saveMemberBtn').addEventListener('click', saveMember);
+      document.getElementById('saveMemberBtn').addEventListener('click', async function() {
+        try {
+          await saveMember();
+        } catch (error) {
+          console.error('保存成员失败:', error);
+        }
+      });
       
       // 编辑成员
       document.getElementById('editDetailsBtn').addEventListener('click', function() {
@@ -653,7 +669,13 @@
       });
       
       // 删除成员
-      document.getElementById('deleteMemberBtn').addEventListener('click', deleteMember);
+      document.getElementById('deleteMemberBtn').addEventListener('click', async function() {
+        try {
+          await deleteMember();
+        } catch (error) {
+          console.error('删除成员失败:', error);
+        }
+      });
       
       // 开始创建按钮
       document.getElementById('startCreatingBtn').addEventListener('click', function() {
@@ -694,6 +716,11 @@
         document.getElementById('importContent').classList.add('hidden');
         document.getElementById('exportContent').classList.remove('hidden');
         document.getElementById('importExportModal').classList.remove('hidden');
+      });
+      
+      // 下载模板按钮
+      document.getElementById('downloadTemplateBtn').addEventListener('click', function() {
+        downloadImportTemplate();
       });
       
       document.getElementById('closeImportExportModal').addEventListener('click', function() {
@@ -789,6 +816,7 @@
       document.getElementById('memberName').value = member.name;
       document.querySelector(`input[name="gender"][value="${member.gender}"]`).checked = true;
       document.getElementById('birthDate').value = member.birthDate || '';
+      document.getElementById('birthTime').value = member.birthTime || '';
       document.getElementById('deathDate').value = member.deathDate || '';
       document.getElementById('bio').value = member.bio || '';
       
@@ -828,6 +856,9 @@
       const member = familyData.members.find(m => m.id === memberId);
       if (!member) return;
       
+      console.log('=== 显示成员详情 ===');
+      console.log('成员数据:', member);
+      
       selectedMemberId = memberId;
       
       // 构建详情HTML
@@ -842,10 +873,43 @@
         </div>
         
         <div class="space-y-4">
-          <div>
-            <h4 class="text-sm font-medium text-gray-500 mb-1">出生日期</h4>
-            <p>${formatDate(member.birthDate) || '未知'}</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">公历生日</h4>
+              <p>${formatDate(member.birthDate) || '未知'} ${member.birthTime ? member.birthTime : ''}</p>
+            </div>
+            ${member.lunarBirthDate ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">农历生日</h4>
+              <p>${member.lunarBirthDate}</p>
+            </div>
+            ` : ''}
           </div>
+          
+          ${member.baZi ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">生辰八字</h4>
+              <p class="font-medium">${member.baZi.full}</p>
+              <div class="grid grid-cols-2 gap-2 mt-1 text-sm">
+                <div>
+                  <span class="text-gray-500">年柱：</span>
+                  <span>${member.baZi.year}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">月柱：</span>
+                  <span>${member.baZi.month}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">日柱：</span>
+                  <span>${member.baZi.day}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">时柱：</span>
+                  <span>${member.baZi.time}</span>
+                </div>
+              </div>
+            </div>
+          ` : ''}
           
           ${member.deathDate ? `
             <div>
@@ -1438,12 +1502,25 @@
     
 
     
-    function saveMember() {
+    async function saveMember() {
+      const birthDate = document.getElementById('birthDate').value || null;
+      const birthTime = document.getElementById('birthTime').value || null;
+      
+      console.log('=== 保存成员 ===');
+      console.log('出生日期:', birthDate);
+      console.log('出生时间:', birthTime);
+      
+      // 计算生辰八字
+      const baZi = await calculateBaZi(birthDate, birthTime);
+      console.log('生辰八字:', baZi);
+      
       const formData = {
         id: document.getElementById('memberId').value || generateId(),
         name: document.getElementById('memberName').value.trim(),
         gender: document.querySelector('input[name="gender"]:checked').value,
-        birthDate: document.getElementById('birthDate').value || null,
+        birthDate: birthDate,
+        birthTime: birthTime,
+        baZi: baZi,
         deathDate: document.getElementById('deathDate').value || null,
         photo: document.getElementById('photoPreview').classList.contains('hidden') ? null : document.getElementById('photoPreview').src,
         bio: document.getElementById('bio').value.trim() || null,
@@ -1451,6 +1528,8 @@
         motherId: document.getElementById('motherId').value || null,
         spouseIds: document.getElementById('spouseId').value ? [document.getElementById('spouseId').value] : []
       };
+      
+      console.log('表单数据:', formData);
       
       // 验证数据
       if (!formData.name) {
@@ -1479,88 +1558,61 @@
         return;
       }
       
-      // 保存数据
-      if (currentEditMode === 'add') {
-        // 添加新成员
-        familyData.members.push(formData);
+      try {
+        let response;
+        if (currentEditMode === 'add') {
+          // 添加新成员
+          response = await fetch('http://localhost:5001/api/members', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+          });
+        } else {
+          // 更新现有成员
+          const memberId = formData.id;
+          response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+          });
+        }
         
-        // 如果是第一个成员，设为根成员
-        if (familyData.members.length === 1) {
-          familyData.rootMemberId = formData.id;
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
         }
-      } else {
-        // 更新现有成员
-        const index = familyData.members.findIndex(m => m.id === formData.id);
-        if (index !== -1) {
-          // 保留childrenIds
-          const existingMember = familyData.members[index];
-          formData.childrenIds = existingMember.childrenIds || [];
-          
-          familyData.members[index] = formData;
-        }
-      }
-      
-      // 更新配偶关系
-      if (formData.spouseIds.length > 0) {
-        const spouseId = formData.spouseIds[0];
-        const spouse = familyData.members.find(m => m.id === spouseId);
         
-        if (spouse) {
-          if (!spouse.spouseIds) {
-            spouse.spouseIds = [];
-          }
-          
-          if (!spouse.spouseIds.includes(formData.id)) {
-            spouse.spouseIds.push(formData.id);
-          }
+        const result = await response.json();
+        console.log('保存结果:', result);
+        
+        // 重新加载数据
+        await loadFamilyData();
+        updateMembersList();
+        updateRelationsSelects();
+        
+        // 如果有数据，隐藏初始提示并渲染家族树
+        if (familyData.members.length > 0) {
+          document.getElementById('initialPrompt').classList.add('hidden');
+          renderFamilyTree();
         }
+        
+        // 跳转到成员详情页
+        showMemberDetails(formData.id);
+        
+        // 显示成功消息
+        showMessage('保存成功');
+      } catch (error) {
+        console.error('保存成员失败:', error);
+        alert('保存失败: ' + error.message);
       }
-      
-      // 更新子女关系
-      if (formData.fatherId) {
-        const father = familyData.members.find(m => m.id === formData.fatherId);
-        if (father) {
-          if (!father.childrenIds) {
-            father.childrenIds = [];
-          }
-          
-          if (!father.childrenIds.includes(formData.id)) {
-            father.childrenIds.push(formData.id);
-          }
-        }
-      }
-      
-      if (formData.motherId) {
-        const mother = familyData.members.find(m => m.id === formData.motherId);
-        if (mother) {
-          if (!mother.childrenIds) {
-            mother.childrenIds = [];
-          }
-          
-          if (!mother.childrenIds.includes(formData.id)) {
-            mother.childrenIds.push(formData.id);
-          }
-        }
-      }
-      
-      // 更新数据
-      familyData.lastUpdated = new Date().toISOString();
-      saveFamilyData();
-      updateMembersList();
-      updateRelationsSelects();
-      
-      // 如果有数据，隐藏初始提示并渲染家族树
-      if (familyData.members.length > 0) {
-        document.getElementById('initialPrompt').classList.add('hidden');
-        renderFamilyTree();
-      }
-      
-      // 返回成员列表
-      showMembersPanel();
     }
     
     // 删除成员
-    function deleteMember() {
+    async function deleteMember() {
       const memberId = document.getElementById('memberId').value;
       if (!memberId) return;
       
@@ -1568,49 +1620,45 @@
         return;
       }
       
-      // 删除相关关系
-      familyData.members.forEach(member => {
-        // 删除父/母关系
-        if (member.fatherId === memberId) member.fatherId = null;
-        if (member.motherId === memberId) member.motherId = null;
+      try {
+        // 通过API删除成员
+        const response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
         
-        // 删除配偶关系
-        if (member.spouseIds) {
-          member.spouseIds = member.spouseIds.filter(id => id !== memberId);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
         }
         
-        // 删除子女关系
-        if (member.childrenIds) {
-          member.childrenIds = member.childrenIds.filter(id => id !== memberId);
+        const result = await response.json();
+        console.log('删除结果:', result);
+        
+        // 重新加载数据
+        await loadFamilyData();
+        updateMembersList();
+        updateRelationsSelects();
+        
+        // 如果没有数据，显示初始提示
+        if (familyData.members.length === 0) {
+          document.getElementById('initialPrompt').classList.remove('hidden');
+          clearCanvas();
+        } else {
+          renderFamilyTree();
         }
-      });
-      
-      // 删除成员
-      familyData.members = familyData.members.filter(m => m.id !== memberId);
-      
-      // 如果删除的是根成员，重新设置根成员
-      if (familyData.rootMemberId === memberId && familyData.members.length > 0) {
-        familyData.rootMemberId = familyData.members[0].id;
-      } else if (familyData.members.length === 0) {
-        familyData.rootMemberId = null;
+        
+        // 返回成员列表
+        showMembersPanel();
+        
+        // 显示成功消息
+        showMessage('删除成功');
+      } catch (error) {
+        console.error('删除成员失败:', error);
+        alert('删除失败: ' + error.message);
       }
-      
-      // 更新数据
-      familyData.lastUpdated = new Date().toISOString();
-      saveFamilyData();
-      updateMembersList();
-      updateRelationsSelects();
-      
-      // 如果没有数据，显示初始提示
-      if (familyData.members.length === 0) {
-        document.getElementById('initialPrompt').classList.remove('hidden');
-        clearCanvas();
-      } else {
-        renderFamilyTree();
-      }
-      
-      // 返回成员列表
-      showMembersPanel();
     }
     
     // 更新成员列表
@@ -2768,9 +2816,93 @@
       return date.toLocaleDateString('zh-CN');
     }
     
+    // 计算生辰八字（调用后端API）
+    async function calculateBaZi(birthDate, birthTime) {
+      if (!birthDate) return null;
+      
+      console.log('=== 开始计算生辰八字 ===');
+      
+      // 构建完整的出生日期时间字符串
+      let birthDateTimeStr;
+      if (birthTime) {
+        birthDateTimeStr = `${birthDate} ${birthTime}:00`;
+      } else {
+        birthDateTimeStr = `${birthDate} 12:00:00`; // 默认中午12点
+      }
+      
+      console.log('输入的出生时间:', birthDateTimeStr);
+      
+      try {
+        // 调用后端API
+        console.log('开始调用API...');
+        const response = await fetch('http://localhost:5001/api/calculate-bazi', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            birthTime: birthDateTimeStr,
+            longitude: 120.0 // 默认经度
+          })
+        });
+        
+        console.log('API响应状态:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
+        }
+        
+        const data = await response.json();
+        console.log('API返回结果:', data);
+        
+        // 检查返回数据是否完整
+        if (!data.full || !data.year || !data.month || !data.day || !data.time) {
+          throw new Error('API返回的数据不完整');
+        }
+        
+        // 组合生辰八字
+        const baZi = {
+          year: data.year,
+          month: data.month,
+          day: data.day,
+          time: data.time,
+          full: data.full
+        };
+        
+        console.log('最终计算得到的生辰八字:', baZi.full);
+        console.log('=== 生辰八字计算结束 ===');
+        
+        return baZi;
+      } catch (error) {
+        console.error('计算生辰八字失败:', error);
+        // 失败时返回null
+        return null;
+      }
+    }
+    
     // 生成唯一ID
     function generateId() {
       return 'member_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    }
+    
+    // 显示消息
+    function showMessage(message) {
+      // 创建消息元素
+      const messageElement = document.createElement('div');
+      messageElement.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-md shadow-lg z-50';
+      messageElement.textContent = message;
+      
+      // 添加到页面
+      document.body.appendChild(messageElement);
+      
+      // 3秒后自动移除
+      setTimeout(() => {
+        messageElement.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+        setTimeout(() => {
+          document.body.removeChild(messageElement);
+        }, 500);
+      }, 3000);
     }
     
     // IndexedDB数据库初始化
@@ -2800,139 +2932,48 @@
     
     // 保存家族数据到IndexedDB
     function saveFamilyData() {
-      initDatabase().then(db => {
-        const transaction = db.transaction('familyData', 'readwrite');
-        const store = transaction.objectStore('familyData');
-        const request = store.put(familyData, 'familyTreeData');
-        
-        request.onsuccess = function() {
-          console.log('数据保存成功');
-        };
-        
-        request.onerror = function(event) {
-          console.error('数据保存失败:', event.target.error);
-          // 保存失败时回退到localStorage
-          localStorage.setItem('familyTreeData', JSON.stringify(familyData));
-        };
-      }).catch(error => {
-        console.error('数据库操作失败:', error);
-        // 数据库操作失败时回退到localStorage
-        localStorage.setItem('familyTreeData', JSON.stringify(familyData));
-      });
+      console.log('保存数据到API');
+      // 这里不再需要本地存储，数据通过saveMember函数中的API调用保存
     }
     
-    // 从IndexedDB加载家族数据
+    // 从API加载家族数据
     function loadFamilyData() {
       return new Promise((resolve, reject) => {
-        initDatabase().then(db => {
-          const transaction = db.transaction('familyData', 'readonly');
-          const store = transaction.objectStore('familyData');
-          const request = store.get('familyTreeData');
-          
-          request.onsuccess = function(event) {
-            const savedData = event.target.result;
+        // 从API获取数据
+        fetch('http://localhost:5001/api/members')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`API调用失败: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('从API获取的成员数据:', data);
             
-            if (savedData) {
-              try {
-                familyData = savedData;
-                
-                // 如果有数据，隐藏初始提示并渲染家族树
-                if (familyData.members.length > 0) {
-                  document.getElementById('initialPrompt').classList.add('hidden');
-                  renderFamilyTree();
-                }
-                resolve(familyData);
-              } catch (error) {
-                console.error('加载家族数据失败:', error);
-                familyData = {
-                  members: [],
-                  rootMemberId: null,
-                  lastUpdated: new Date().toISOString()
-                };
-                resolve(familyData);
-              }
-            } else {
-              // IndexedDB中没有数据，尝试从localStorage加载
-              const localStorageData = localStorage.getItem('familyTreeData');
-              if (localStorageData) {
-                try {
-                  familyData = JSON.parse(localStorageData);
-                  
-                  // 如果有数据，隐藏初始提示并渲染家族树
-                  if (familyData.members.length > 0) {
-                    document.getElementById('initialPrompt').classList.add('hidden');
-                    renderFamilyTree();
-                  }
-                  resolve(familyData);
-                } catch (error) {
-                  console.error('加载localStorage数据失败:', error);
-                  familyData = {
-                    members: [],
-                    rootMemberId: null,
-                    lastUpdated: new Date().toISOString()
-                  };
-                  resolve(familyData);
-                }
-              } else {
-                resolve(familyData);
-              }
+            // 处理数据格式
+            familyData = {
+              members: data.members || [],
+              rootMemberId: data.members.length > 0 ? data.members[0].id : null,
+              lastUpdated: new Date().toISOString()
+            };
+            
+            // 如果有数据，隐藏初始提示并渲染家族树
+            if (familyData.members.length > 0) {
+              document.getElementById('initialPrompt').classList.add('hidden');
+              renderFamilyTree();
             }
-          };
-          
-          request.onerror = function(event) {
-            console.error('数据加载失败:', event.target.error);
-            // 加载失败时尝试从localStorage加载
-            const localStorageData = localStorage.getItem('familyTreeData');
-            if (localStorageData) {
-              try {
-                familyData = JSON.parse(localStorageData);
-                
-                // 如果有数据，隐藏初始提示并渲染家族树
-                if (familyData.members.length > 0) {
-                  document.getElementById('initialPrompt').classList.add('hidden');
-                  renderFamilyTree();
-                }
-                resolve(familyData);
-              } catch (error) {
-                console.error('加载localStorage数据失败:', error);
-                familyData = {
-                  members: [],
-                  rootMemberId: null,
-                  lastUpdated: new Date().toISOString()
-                };
-                resolve(familyData);
-              }
-            } else {
-              resolve(familyData);
-            }
-          };
-        }).catch(error => {
-          console.error('数据库操作失败:', error);
-          // 数据库操作失败时尝试从localStorage加载
-          const localStorageData = localStorage.getItem('familyTreeData');
-          if (localStorageData) {
-            try {
-              familyData = JSON.parse(localStorageData);
-              
-              // 如果有数据，隐藏初始提示并渲染家族树
-              if (familyData.members.length > 0) {
-                document.getElementById('initialPrompt').classList.add('hidden');
-                renderFamilyTree();
-              }
-              resolve(familyData);
-            } catch (error) {
-              console.error('加载localStorage数据失败:', error);
-              familyData = {
-                members: [],
-                rootMemberId: null,
-                lastUpdated: new Date().toISOString()
-              };
-              resolve(familyData);
-            }
-          } else {
             resolve(familyData);
-          }
-        });
+          })
+          .catch(error => {
+            console.error('从API加载数据失败:', error);
+            // 失败时使用默认数据
+            familyData = {
+              members: [],
+              rootMemberId: null,
+              lastUpdated: new Date().toISOString()
+            };
+            resolve(familyData);
+          });
       });
     }
     
@@ -2948,7 +2989,7 @@
       
       const reader = new FileReader();
       
-      reader.onload = function(e) {
+      reader.onload = async function(e) {
         try {
           // 读取Excel文件
           const workbook = XLSX.read(e.target.result, { type: 'binary' });
@@ -2961,21 +3002,96 @@
           
           // 处理数据格式，将逗号分隔的字符串转换回数组
           const processedMembers = membersData.map(member => {
-            // 处理spouseIds
-            if (member.spouseIds && typeof member.spouseIds === 'string') {
-              member.spouseIds = member.spouseIds.split(',').filter(id => id.trim() !== '');
-            } else {
-              member.spouseIds = [];
+            // 处理中文标题的字段映射
+            const processedMember = {
+              id: generateId(), // 自动生成ID
+              name: member.name || member['姓名'],
+              gender: member.gender || (member['性别'] === '男' ? 'male' : member['性别'] === '女' ? 'female' : ''),
+              birthDate: member.birthDate || member['出生日期'],
+              birthTime: member.birthTime || member['出生时间'],
+              deathDate: member.deathDate || member['去世日期'],
+              bio: member.bio || member['生平简介'],
+              fatherName: member.father || member['父亲'],
+              motherName: member.mother || member['母亲'],
+              spouseNames: member.spouse || member['配偶'],
+              fatherId: null,
+              motherId: null,
+              spouseIds: [],
+              childrenIds: []
+            };
+            
+            return processedMember;
+          });
+          
+          // 建立姓名到ID的映射，包含系统中已存在的成员
+          const nameToIdMap = {};
+          
+          // 先添加系统中已存在的成员
+          familyData.members.forEach(existingMember => {
+            nameToIdMap[existingMember.name.trim()] = existingMember.id;
+          });
+          
+          // 再添加新导入的成员
+          processedMembers.forEach(member => {
+            nameToIdMap[member.name.trim()] = member.id;
+          });
+          
+          // 记录导入结果
+          const importResults = {
+            success: 0,
+            failed: 0,
+            errors: []
+          };
+          
+          // 根据姓名关联家族关系
+          processedMembers.forEach(member => {
+            let memberErrors = [];
+            
+            // 关联父亲
+            if (member.fatherName) {
+              const fatherName = member.fatherName.trim();
+              if (nameToIdMap[fatherName]) {
+                member.fatherId = nameToIdMap[fatherName];
+              } else if (fatherName) {
+                memberErrors.push(`父亲 "${fatherName}" 未找到`);
+              }
             }
             
-            // 处理childrenIds
-            if (member.childrenIds && typeof member.childrenIds === 'string') {
-              member.childrenIds = member.childrenIds.split(',').filter(id => id.trim() !== '');
-            } else {
-              member.childrenIds = [];
+            // 关联母亲
+            if (member.motherName) {
+              const motherName = member.motherName.trim();
+              if (nameToIdMap[motherName]) {
+                member.motherId = nameToIdMap[motherName];
+              } else if (motherName) {
+                memberErrors.push(`母亲 "${motherName}" 未找到`);
+              }
             }
             
-            return member;
+            // 关联配偶
+            if (member.spouseNames) {
+              const spouseNames = member.spouseNames.split(',').map(name => name.trim()).filter(name => name !== '');
+              spouseNames.forEach(spouseName => {
+                if (nameToIdMap[spouseName]) {
+                  member.spouseIds.push(nameToIdMap[spouseName]);
+                } else {
+                  memberErrors.push(`配偶 "${spouseName}" 未找到`);
+                }
+              });
+            }
+            
+            // 清理临时字段
+            delete member.fatherName;
+            delete member.motherName;
+            delete member.spouseNames;
+            
+            // 记录结果
+            importResults.success++;
+            if (memberErrors.length > 0) {
+              importResults.errors.push({
+                name: member.name,
+                errors: memberErrors
+              });
+            }
           });
           
           // 构建家族数据
@@ -2994,6 +3110,16 @@
           familyData = importedData;
           familyData.lastUpdated = new Date().toISOString();
           
+          // 为每个成员计算生辰八字
+          for (const member of familyData.members) {
+            if (member.birthDate) {
+              const baZi = await calculateBaZi(member.birthDate, member.birthTime);
+              if (baZi) {
+                member.baZi = baZi;
+              }
+            }
+          }
+          
           // 保存数据
           saveFamilyData();
           updateMembersList();
@@ -3005,7 +3131,17 @@
             renderFamilyTree();
           }
           
-          alert('导入成功');
+          // 显示导入结果
+          let resultMessage = `导入完成！\n成功: ${importResults.success} 条`;
+          
+          if (importResults.errors.length > 0) {
+            resultMessage += '\n\n注意事项:';
+            importResults.errors.forEach(error => {
+              resultMessage += `\n- ${error.name}: ${error.errors.join(', ')}`;
+            });
+          }
+          
+          alert(resultMessage);
         } catch (error) {
           console.error('导入失败:', error);
           document.getElementById('importError').textContent = '导入失败: ' + error.message;
@@ -3023,17 +3159,19 @@
       // 准备导出数据
       const exportData = familyData.members.map(member => {
         return {
-          id: member.id,
-          name: member.name,
-          gender: member.gender,
-          birthDate: member.birthDate || '',
-          deathDate: member.deathDate || '',
-          bio: member.bio || '',
-          photo: member.photo || '',
-          fatherId: member.fatherId || '',
-          motherId: member.motherId || '',
-          spouseIds: member.spouseIds ? member.spouseIds.join(',') : '',
-          childrenIds: member.childrenIds ? member.childrenIds.join(',') : ''
+          'ID': member.id,
+          '姓名': member.name,
+          '性别': member.gender === 'male' ? '男' : '女',
+          '出生日期': member.birthDate || '',
+          '出生时间': member.birthTime || '',
+          '农历生日': member.lunarBirthDate || '',
+          '生辰八字': member.baZi && member.baZi.full ? member.baZi.full : '',
+          '去世日期': member.deathDate || '',
+          '生平简介': member.bio || '',
+          '父亲ID': member.fatherId || '',
+          '母亲ID': member.motherId || '',
+          '配偶ID': member.spouseIds ? member.spouseIds.join(',') : '',
+          '子女ID': member.childrenIds ? member.childrenIds.join(',') : ''
         };
       });
       
@@ -3046,6 +3184,32 @@
       
       // 导出为Excel文件
       XLSX.writeFile(workbook, filename + '.xlsx');
+    }
+    
+    // 下载导入模板
+    function downloadImportTemplate() {
+      // 准备模板数据，包含所有需要用户填写的字段
+      const templateData = [{
+        '姓名': '张三',
+        '性别': '男',
+        '出生日期': '1980-01-01',
+        '出生时间': '12:00',
+        '去世日期': '',
+        '生平简介': '暂无简介',
+        '父亲': '',
+        '母亲': '',
+        '配偶': ''
+      }];
+      
+      // 创建工作表
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      
+      // 创建工作簿
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '家族成员');
+      
+      // 导出为Excel文件
+      XLSX.writeFile(workbook, 'family_tree_import_template.xlsx');
     }
   </script>
 
