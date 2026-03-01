@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家族树</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#4F46E5',
+            secondary: '#10B981',
+            dark: '#1F2937',
+            light: '#F3F4F6'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .tree-node {
+        @apply bg-white rounded-lg shadow-md p-3 border-2 border-primary text-center min-w-[120px];
+      }
+      .tree-node:hover {
+        @apply shadow-lg scale-105 transition-all duration-300;
+      }
+      .tree-connector {
+        @apply h-8 w-0.5 bg-gray-400 mx-auto;
+      }
+      .tree-horizontal-line {
+        @apply h-0.5 bg-gray-400 flex-grow;
+      }
+      .tree-spouse-container {
+        @apply flex items-center justify-center gap-4;
+      }
+      .tree-children-container {
+        @apply flex flex-wrap justify-center gap-4 mt-4;
+      }
+      .btn-primary {
+        @apply bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors;
+      }
+      .btn-secondary {
+        @apply bg-secondary text-white px-4 py-2 rounded-md hover:bg-secondary/90 transition-colors;
+      }
+      .btn-outline {
+        @apply border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors;
+      }
+      .input-field {
+        @apply border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50;
+      }
+      .modal {
+        @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+      }
+      .modal-content {
+        @apply bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-primary text-white shadow-md">
+      <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+          <i class="fa fa-tree text-2xl"></i>
+          <h1 class="text-xl font-bold">家族树</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button id="exportBtn" class="flex items-center space-x-1 px-3 py-1 rounded hover:bg-white/20 transition-colors">
+            <i class="fa fa-download"></i>
+            <span>导出</span>
+          </button>
+          <button id="importBtn" class="flex items-center space-x-1 px-3 py-1 rounded hover:bg-white/20 transition-colors">
+            <i class="fa fa-upload"></i>
+            <span>导入</span>
+          </button>
+          <button id="addMemberBtn" class="flex items-center space-x-1 px-3 py-1 rounded hover:bg-white/20 transition-colors">
+            <i class="fa fa-plus"></i>
+            <span>添加成员</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-6">
+      <!-- 初始提示 -->
+      <div id="initialPrompt" class="text-center py-16">
+        <i class="fa fa-tree text-6xl text-primary mb-4"></i>
+        <h2 class="text-2xl font-bold mb-2">欢迎使用家族树</h2>
+        <p class="text-gray-600 mb-6">添加家族成员，构建您的家族树</p>
+        <button id="addFirstMemberBtn" class="btn-primary">添加第一个成员</button>
+      </div>
+
+      <!-- 家族树 -->
+      <div id="familyTree" class="hidden">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold">家族树</h2>
+          <div class="flex space-x-2">
+            <button id="zoomInBtn" class="btn-outline">
+              <i class="fa fa-search-plus"></i>
+            </button>
+            <button id="zoomOutBtn" class="btn-outline">
+              <i class="fa fa-search-minus"></i>
+            </button>
+            <button id="resetZoomBtn" class="btn-outline">
+              <i class="fa fa-refresh"></i>
+            </button>
+          </div>
+        </div>
+        <div id="treeContainer" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+          <!-- 家族树将在这里渲染 -->
+        </div>
+      </div>
+
+      <!-- 成员列表 -->
+      <div id="membersList" class="mt-8">
+        <h2 class="text-2xl font-bold mb-4">家族成员</h2>
+        <div class="bg-white rounded-lg shadow-md p-4">
+          <div class="overflow-x-auto">
+            <table class="min-w-full">
+              <thead>
+                <tr class="bg-gray-100">
+                  <th class="px-4 py-2 text-left">姓名</th>
+                  <th class="px-4 py-2 text-left">性别</th>
+                  <th class="px-4 py-2 text-left">出生日期</th>
+                  <th class="px-4 py-2 text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody id="membersTableBody">
+                <!-- 成员列表将在这里渲染 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部信息 -->
+    <footer class="bg-gray-800 text-white py-4">
+      <div class="container mx-auto px-4 text-center">
+        <p>家族树 © 2024</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 添加/编辑成员弹窗 -->
+  <div id="memberModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="modalTitle" class="text-xl font-bold">添加成员</h3>
+        <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <form id="memberForm">
+        <input type="hidden" id="memberId">
+        <div class="grid grid-cols-1 gap-4">
+          <div>
+            <label for="name" class="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+            <input type="text" id="name" class="input-field w-full" required>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">性别</label>
+            <div class="flex space-x-4">
+              <label class="flex items-center">
+                <input type="radio" name="gender" value="male" class="mr-2" checked>
+                <span>男</span>
+              </label>
+              <label class="flex items-center">
+                <input type="radio" name="gender" value="female" class="mr-2">
+                <span>女</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label for="birthDate" class="block text-sm font-medium text-gray-700 mb-1">出生日期</label>
+            <input type="date" id="birthDate" class="input-field w-full">
+          </div>
+          <div>
+            <label for="birthTime" class="block text-sm font-medium text-gray-700 mb-1">出生时间</label>
+            <input type="time" id="birthTime" class="input-field w-full">
+          </div>
+          <div>
+            <label for="deathDate" class="block text-sm font-medium text-gray-700 mb-1">去世日期</label>
+            <input type="date" id="deathDate" class="input-field w-full">
+          </div>
+          <div>
+            <label for="bio" class="block text-sm font-medium text-gray-700 mb-1">生平简介</label>
+            <textarea id="bio" class="input-field w-full" rows="3"></textarea>
+          </div>
+          <div>
+            <label for="fatherId" class="block text-sm font-medium text-gray-700 mb-1">父亲</label>
+            <select id="fatherId" class="input-field w-full">
+              <option value="">选择父亲</option>
+            </select>
+          </div>
+          <div>
+            <label for="motherId" class="block text-sm font-medium text-gray-700 mb-1">母亲</label>
+            <select id="motherId" class="input-field w-full">
+              <option value="">选择母亲</option>
+            </select>
+          </div>
+          <div>
+            <label for="spouseIds" class="block text-sm font-medium text-gray-700 mb-1">配偶</label>
+            <select id="spouseIds" class="input-field w-full" multiple>
+              <option value="">选择配偶</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end space-x-3">
+          <button type="button" id="cancelBtn" class="btn-outline">取消</button>
+          <button type="submit" class="btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 成员详情弹窗 -->
+  <div id="memberDetailModal" class="modal hidden">
+    <div class="modal-content max-w-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="detailModalTitle" class="text-xl font-bold">成员详情</h3>
+        <button id="closeDetailModalBtn" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <div id="memberDetails" class="space-y-4">
+        <!-- 成员详情将在这里渲染 -->
+      </div>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button id="editMemberBtn" class="btn-outline">编辑</button>
+        <button id="deleteMemberBtn" class="btn-outline text-red-500">删除</button>
+        <button id="closeDetailBtn" class="btn-primary">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导出弹窗 -->
+  <div id="exportModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold">导出数据</h3>
+        <button id="closeExportModalBtn" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="exportFilename" class="block text-sm font-medium text-gray-700 mb-1">文件名</label>
+          <input type="text" id="exportFilename" class="input-field w-full" value="family_tree_data">
+        </div>
+        <button id="exportConfirmBtn" class="btn-primary w-full">导出 Excel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入弹窗 -->
+  <div id="importModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold">导入数据</h3>
+        <button id="closeImportModalBtn" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="importFile" class="block text-sm font-medium text-gray-700 mb-1">选择文件</label>
+          <input type="file" id="importFile" class="input-field w-full" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="text-red-500 hidden" id="importError"></div>
+        <div class="flex space-x-2">
+          <button id="downloadTemplateBtn" class="btn-outline flex-1">下载导入模板</button>
+          <button id="importConfirmBtn" class="btn-primary flex-1">导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 照片编辑器弹窗 -->
+  <div id="photoEditorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg p-6 max-w-2xl w-full">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-bold">照片编辑</h3>
+        <button id="closePhotoEditorBtn" class="text-gray-500 hover:text-gray-700">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div class="text-center">
+          <div id="photoPreview" class="w-48 h-48 mx-auto bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+            <i class="fa fa-user text-4xl text-gray-400"></i>
+          </div>
+          <input type="file" id="photoInput" class="hidden" accept="image/*">
+          <button id="uploadPhotoBtn" class="mt-2 btn-outline">上传照片</button>
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button id="cancelPhotoBtn" class="btn-outline">取消</button>
+          <button id="savePhotoBtn" class="btn-primary">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 全局变量
+    let familyData = {
+      members: [],
+      rootMemberId: null,
+      lastUpdated: new Date().toISOString()
+    };
+    let currentZoom = 1;
+    let selectedMemberId = null;
+    let currentPhoto = null;
+
+    // 生成唯一ID
+    function generateId() {
+      return 'member_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    }
+
+    // 初始化应用
+    async function initApp() {
+      console.log('=== 初始化应用 ===');
+      await loadFamilyData();
+      updateMembersList();
+      updateRelationsSelects();
+      renderFamilyTree();
+      console.log('=== 应用初始化完成 ===');
+    }
+
+    // 加载家族数据
+    async function loadFamilyData() {
+      console.log('=== 加载家族数据 ===');
+      try {
+        const response = await fetch('http://localhost:5001/api/members');
+        if (response.ok) {
+          const data = await response.json();
+          familyData.members = data.members || [];
+          familyData.rootMemberId = data.rootMemberId || (familyData.members.length > 0 ? familyData.members[0].id : null);
+          familyData.lastUpdated = new Date().toISOString();
+          console.log('从API加载数据成功，成员数量:', familyData.members.length);
+        } else {
+          console.error('从API加载数据失败，使用本地存储');
+          // 尝试从本地存储加载
+          const storedData = localStorage.getItem('familyData');
+          if (storedData) {
+            familyData = JSON.parse(storedData);
+            console.log('从本地存储加载数据成功，成员数量:', familyData.members.length);
+          }
+        }
+      } catch (error) {
+        console.error('加载数据失败:', error);
+        // 尝试从本地存储加载
+        const storedData = localStorage.getItem('familyData');
+        if (storedData) {
+          familyData = JSON.parse(storedData);
+          console.log('从本地存储加载数据成功，成员数量:', familyData.members.length);
+        }
+      }
+      console.log('=== 加载家族数据完成 ===');
+    }
+
+    // 保存家族数据
+    async function saveFamilyData() {
+      console.log('=== 保存家族数据 ===');
+      try {
+        const response = await fetch('http://localhost:5001/api/members', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(familyData)
+        });
+        if (response.ok) {
+          console.log('数据保存到API成功');
+        } else {
+          console.error('数据保存到API失败，保存到本地存储');
+          // 保存到本地存储
+          localStorage.setItem('familyData', JSON.stringify(familyData));
+        }
+      } catch (error) {
+        console.error('保存数据失败:', error);
+        // 保存到本地存储
+        localStorage.setItem('familyData', JSON.stringify(familyData));
+      }
+      console.log('=== 保存家族数据完成 ===');
+    }
+
+    // 计算生辰八字
+    async function calculateBaZi(birthDate, birthTime) {
+      if (!birthDate) return null;
+      
+      console.log('=== 开始计算生辰八字 ===');
+      
+      let birthDateTimeStr;
+      if (birthTime) {
+        birthDateTimeStr = `${birthDate} ${birthTime}:00`;
+      } else {
+        birthDateTimeStr = `${birthDate} 12:00:00`;
+      }
+      
+      console.log('输入的出生时间:', birthDateTimeStr);
+      
+      try {
+        console.log('开始调用API...');
+        const response = await fetch('http://localhost:5001/api/calculate-bazi', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            birthTime: birthDateTimeStr,
+            longitude: 120.0
+          })
+        });
+        
+        console.log('API响应状态:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`API调用失败: ${response.status} - ${errorData.error || '未知错误'}`);
+        }
+        
+        const data = await response.json();
+        console.log('API返回结果:', data);
+        
+        if (!data.full || !data.year || !data.month || !data.day || !data.time) {
+          throw new Error('API返回的数据不完整');
+        }
+        
+        const baZi = {
+          year: data.year,
+          month: data.month,
+          day: data.day,
+          time: data.time,
+          full: data.full
+        };
+        
+        console.log('最终计算得到的生辰八字:', baZi.full);
+        console.log('=== 生辰八字计算结束 ===');
+        
+        return baZi;
+      } catch (error) {
+        console.error('计算生辰八字失败:', error);
+        return null;
+      }
+    }
+
+    // 保存成员
+    async function saveMember(memberData) {
+      console.log('=== 保存成员 ===');
+      console.log('保存的成员数据:', memberData);
+      
+      try {
+        // 计算生辰八字
+        let baZi = null;
+        if (memberData.birthDate) {
+          baZi = await calculateBaZi(memberData.birthDate, memberData.birthTime);
+          console.log('计算得到的生辰八字:', baZi);
+        }
+        
+        // 构建完整的成员数据
+        const member = {
+          id: memberData.id || generateId(),
+          name: memberData.name,
+          gender: memberData.gender,
+          birthDate: memberData.birthDate,
+          birthTime: memberData.birthTime,
+          deathDate: memberData.deathDate,
+          bio: memberData.bio,
+          fatherId: memberData.fatherId,
+          motherId: memberData.motherId,
+          spouseIds: memberData.spouseIds || [],
+          childrenIds: memberData.childrenIds || [],
+          baZi: baZi
+        };
+        
+        console.log('构建的完整成员数据:', member);
+        
+        let isNewMember = !memberData.id;
+        
+        if (isNewMember) {
+          // 添加新成员
+          familyData.members.push(member);
+          if (!familyData.rootMemberId) {
+            familyData.rootMemberId = member.id;
+          }
+          
+          // 保存到API
+          const response = await fetch('http://localhost:5001/api/members', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(member)
+          });
+          
+          if (!response.ok) {
+            throw new Error('API调用失败');
+          }
+        } else {
+          // 更新现有成员
+          const index = familyData.members.findIndex(m => m.id === member.id);
+          if (index !== -1) {
+            familyData.members[index] = member;
+            
+            // 保存到API
+            const response = await fetch(`http://localhost:5001/api/members/${member.id}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(member)
+            });
+            
+            if (!response.ok) {
+              throw new Error('API调用失败');
+            }
+          }
+        }
+        
+        familyData.lastUpdated = new Date().toISOString();
+        await saveFamilyData();
+        updateMembersList();
+        updateRelationsSelects();
+        renderFamilyTree();
+        
+        console.log('成员保存成功:', member.name);
+        console.log('=== 保存成员完成 ===');
+        
+        // 显示成功消息
+        showMessage('保存成功！');
+        
+        // 跳转到成员详情页
+        showMemberDetails(member.id);
+        
+        return member;
+      } catch (error) {
+        console.error('保存成员失败:', error);
+        showMessage('保存失败: ' + error.message, 'error');
+        return null;
+      }
+    }
+
+    // 删除成员
+    async function deleteMember(memberId) {
+      console.log('=== 删除成员 ===');
+      console.log('删除的成员ID:', memberId);
+      
+      try {
+        // 从API删除
+        const response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error('API调用失败');
+        }
+        
+        // 从本地数据中删除
+        familyData.members = familyData.members.filter(m => m.id !== memberId);
+        
+        // 更新根成员ID
+        if (familyData.rootMemberId === memberId) {
+          familyData.rootMemberId = familyData.members.length > 0 ? familyData.members[0].id : null;
+        }
+        
+        // 更新其他成员的关系
+        familyData.members.forEach(member => {
+          if (member.fatherId === memberId) member.fatherId = null;
+          if (member.motherId === memberId) member.motherId = null;
+          member.spouseIds = member.spouseIds.filter(id => id !== memberId);
+          member.childrenIds = member.childrenIds.filter(id => id !== memberId);
+        });
+        
+        familyData.lastUpdated = new Date().toISOString();
+        await saveFamilyData();
+        updateMembersList();
+        updateRelationsSelects();
+        renderFamilyTree();
+        
+        console.log('成员删除成功');
+        console.log('=== 删除成员完成 ===');
+        
+        // 显示成功消息
+        showMessage('删除成功！');
+        
+        // 关闭详情弹窗
+        document.getElementById('memberDetailModal').classList.add('hidden');
+      } catch (error) {
+        console.error('删除成员失败:', error);
+        showMessage('删除失败: ' + error.message, 'error');
+      }
+    }
+
+    // 显示消息
+    function showMessage(message, type = 'success') {
+      // 创建消息元素
+      const messageElement = document.createElement('div');
+      messageElement.className = `fixed top-4 right-4 px-4 py-2 rounded-md shadow-lg ${type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+      messageElement.textContent = message;
+      
+      // 添加到页面
+      document.body.appendChild(messageElement);
+      
+      // 3秒后移除
+      setTimeout(() => {
+        messageElement.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+        setTimeout(() => {
+          document.body.removeChild(messageElement);
+        }, 500);
+      }, 3000);
+    }
+
+    // 更新成员列表
+    function updateMembersList() {
+      console.log('=== 更新成员列表 ===');
+      const tbody = document.getElementById('membersTableBody');
+      tbody.innerHTML = '';
+      
+      familyData.members.forEach(member => {
+        const row = document.createElement('tr');
+        row.className = 'border-b border-gray-200 hover:bg-gray-50';
+        
+        const nameCell = document.createElement('td');
+        nameCell.className = 'px-4 py-2';
+        nameCell.textContent = member.name;
+        row.appendChild(nameCell);
+        
+        const genderCell = document.createElement('td');
+        genderCell.className = 'px-4 py-2';
+        genderCell.textContent = member.gender === 'male' ? '男' : '女';
+        row.appendChild(genderCell);
+        
+        const birthDateCell = document.createElement('td');
+        birthDateCell.className = 'px-4 py-2';
+        birthDateCell.textContent = member.birthDate || '未知';
+        row.appendChild(birthDateCell);
+        
+        const actionCell = document.createElement('td');
+        actionCell.className = 'px-4 py-2';
+        
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn-outline mr-2';
+        viewBtn.innerHTML = '<i class="fa fa-eye"></i> 查看';
+        viewBtn.addEventListener('click', () => showMemberDetails(member.id));
+        actionCell.appendChild(viewBtn);
+        
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn-outline mr-2';
+        editBtn.innerHTML = '<i class="fa fa-edit"></i> 编辑';
+        editBtn.addEventListener('click', () => editMember(member.id));
+        actionCell.appendChild(editBtn);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-outline text-red-500';
+        deleteBtn.innerHTML = '<i class="fa fa-trash"></i> 删除';
+        deleteBtn.addEventListener('click', () => {
+          if (confirm('确定要删除这个成员吗？')) {
+            deleteMember(member.id);
+          }
+        });
+        actionCell.appendChild(deleteBtn);
+        
+        row.appendChild(actionCell);
+        tbody.appendChild(row);
+      });
+      console.log('=== 更新成员列表完成 ===');
+    }
+
+    // 更新关系选择器
+    function updateRelationsSelects() {
+      console.log('=== 更新关系选择器 ===');
+      const fatherSelect = document.getElementById('fatherId');
+      const motherSelect = document.getElementById('motherId');
+      const spouseSelect = document.getElementById('spouseIds');
+      
+      // 清空选择器
+      fatherSelect.innerHTML = '<option value="">选择父亲</option>';
+      motherSelect.innerHTML = '<option value="">选择母亲</option>';
+      spouseSelect.innerHTML = '';
+      
+      // 添加成员选项
+      familyData.members.forEach(member => {
+        // 父亲选择器
+        const fatherOption = document.createElement('option');
+        fatherOption.value = member.id;
+        fatherOption.textContent = member.name;
+        fatherSelect.appendChild(fatherOption);
+        
+        // 母亲选择器
+        const motherOption = document.createElement('option');
+        motherOption.value = member.id;
+        motherOption.textContent = member.name;
+        motherSelect.appendChild(motherOption);
+        
+        // 配偶选择器
+        const spouseOption = document.createElement('option');
+        spouseOption.value = member.id;
+        spouseOption.textContent = member.name;
+        spouseSelect.appendChild(spouseOption);
+      });
+      console.log('=== 更新关系选择器完成 ===');
+    }
+
+    // 显示成员详情
+    function showMemberDetails(memberId) {
+      console.log('=== 显示成员详情 ===');
+      console.log('成员ID:', memberId);
+      
+      const member = familyData.members.find(m => m.id === memberId);
+      if (!member) {
+        console.error('未找到成员:', memberId);
+        return;
+      }
+      
+      console.log('找到的成员:', member);
+      
+      const detailsContainer = document.getElementById('memberDetails');
+      detailsContainer.innerHTML = '';
+      
+      // 基本信息
+      const basicInfoDiv = document.createElement('div');
+      basicInfoDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+      
+      // 姓名
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      nameDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">姓名</h4><p>${member.name}</p>`;
+      basicInfoDiv.appendChild(nameDiv);
+      
+      // 性别
+      const genderDiv = document.createElement('div');
+      genderDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      genderDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">性别</h4><p>${member.gender === 'male' ? '男' : '女'}</p>`;
+      basicInfoDiv.appendChild(genderDiv);
+      
+      // 出生日期
+      const birthDateDiv = document.createElement('div');
+      birthDateDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      birthDateDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">出生日期</h4><p>${member.birthDate || '未知'}</p>`;
+      basicInfoDiv.appendChild(birthDateDiv);
+      
+      // 出生时间
+      const birthTimeDiv = document.createElement('div');
+      birthTimeDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      birthTimeDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">出生时间</h4><p>${member.birthTime || '未知'}</p>`;
+      basicInfoDiv.appendChild(birthTimeDiv);
+      
+      // 农历生日
+      const lunarBirthDateDiv = document.createElement('div');
+      lunarBirthDateDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      lunarBirthDateDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">农历生日</h4><p>${member.lunarBirthDate || '未知'}</p>`;
+      basicInfoDiv.appendChild(lunarBirthDateDiv);
+      
+      // 生辰八字
+      const baZiDiv = document.createElement('div');
+      baZiDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      baZiDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">生辰八字</h4><p>${member.baZi && member.baZi.full ? member.baZi.full : '未知'}</p>`;
+      basicInfoDiv.appendChild(baZiDiv);
+      
+      // 去世日期
+      const deathDateDiv = document.createElement('div');
+      deathDateDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      deathDateDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">去世日期</h4><p>${member.deathDate || '在世'}</p>`;
+      basicInfoDiv.appendChild(deathDateDiv);
+      
+      detailsContainer.appendChild(basicInfoDiv);
+      
+      // 生平简介
+      if (member.bio) {
+        const bioDiv = document.createElement('div');
+        bioDiv.className = 'p-4 bg-gray-50 rounded-lg';
+        bioDiv.innerHTML = `<h4 class="font-bold text-gray-700 mb-1">生平简介</h4><p>${member.bio}</p>`;
+        detailsContainer.appendChild(bioDiv);
+      }
+      
+      // 家族关系
+      const relationsDiv = document.createElement('div');
+      relationsDiv.className = 'p-4 bg-gray-50 rounded-lg';
+      relationsDiv.innerHTML = '<h4 class="font-bold text-gray-700 mb-2">家族关系</h4>';
+      
+      // 父亲
+      const father = familyData.members.find(m => m.id === member.fatherId);
+      const fatherInfo = father ? `<a href="#" class="member-link" data-id="${father.id}">${father.name}</a>` : '未知';
+      relationsDiv.innerHTML += `<p class="mb-1"><span class="font-medium">父亲：</span>${fatherInfo}</p>`;
+      
+      // 母亲
+      const mother = familyData.members.find(m => m.id === member.motherId);
+      const motherInfo = mother ? `<a href="#" class="member-link" data-id="${mother.id}">${mother.name}</a>` : '未知';
+      relationsDiv.innerHTML += `<p class="mb-1"><span class="font-medium">母亲：</span>${motherInfo}</p>`;
+      
+      // 配偶
+      const spouses = familyData.members.filter(m => member.spouseIds.includes(m.id));
+      const spouseInfo = spouses.length > 0 ? spouses.map(s => `<a href="#" class="member-link" data-id="${s.id}">${s.name}</a>`).join(', ') : '未知';
+      relationsDiv.innerHTML += `<p class="mb-1"><span class="font-medium">配偶：</span>${spouseInfo}</p>`;
+      
+      // 子女
+      const children = familyData.members.filter(m => m.fatherId === member.id || m.motherId === member.id);
+      const childrenInfo = children.length > 0 ? children.map(c => `<a href="#" class="member-link" data-id="${c.id}">${c.name}</a>`).join(', ') : '未知';
+      relationsDiv.innerHTML += `<p class="mb-1"><span class="font-medium">子女：</span>${childrenInfo}</p>`;
+      
+      detailsContainer.appendChild(relationsDiv);
+      
+      // 显示弹窗
+      document.getElementById('memberDetailModal').classList.remove('hidden');
+      selectedMemberId = memberId;
+      
+      // 添加成员链接点击事件
+      setTimeout(() => {
+        document.querySelectorAll('.member-link').forEach(link => {
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetMemberId = link.getAttribute('data-id');
+            showMemberDetails(targetMemberId);
+          });
+        });
+      }, 100);
+      
+      console.log('=== 显示成员详情完成 ===');
+    }
+
+    // 编辑成员
+    function editMember(memberId) {
+      console.log('=== 编辑成员 ===');
+      console.log('成员ID:', memberId);
+      
+      const member = familyData.members.find(m => m.id === memberId);
+      if (!member) {
+        console.error('未找到成员:', memberId);
+        return;
+      }
+      
+      console.log('找到的成员:', member);
+      
+      // 填充表单
+      document.getElementById('memberId').value = member.id;
+      document.getElementById('name').value = member.name;
+      document.querySelector(`input[name="gender"][value="${member.gender}"]`).checked = true;
+      document.getElementById('birthDate').value = member.birthDate || '';
+      document.getElementById('birthTime').value = member.birthTime || '';
+      document.getElementById('deathDate').value = member.deathDate || '';
+      document.getElementById('bio').value = member.bio || '';
+      document.getElementById('fatherId').value = member.fatherId || '';
+      document.getElementById('motherId').value = member.motherId || '';
+      
+      // 填充配偶选择
+      const spouseSelect = document.getElementById('spouseIds');
+      Array.from(spouseSelect.options).forEach(option => {
+        option.selected = member.spouseIds.includes(option.value);
+      });
+      
+      // 显示弹窗
+      document.getElementById('modalTitle').textContent = '编辑成员';
+      document.getElementById('memberModal').classList.remove('hidden');
+      
+      console.log('=== 编辑成员完成 ===');
+    }
+
+    // 渲染家族树
+    function renderFamilyTree() {
+      console.log('=== 渲染家族树 ===');
+      const container = document.getElementById('treeContainer');
+      
+      if (familyData.members.length === 0) {
+        container.innerHTML = '<div class="text-center py-16">暂无成员，请添加成员</div>';
+        document.getElementById('familyTree').classList.add('hidden');
+        document.getElementById('initialPrompt').classList.remove('hidden');
+        console.log('=== 渲染家族树完成：无成员 ===');
+        return;
+      }
+      
+      document.getElementById('familyTree').classList.remove('hidden');
+      document.getElementById('initialPrompt').classList.add('hidden');
+      
+      // 从根成员开始渲染
+      const rootMember = familyData.members.find(m => m.id === familyData.rootMemberId);
+      if (!rootMember) {
+        container.innerHTML = '<div class="text-center py-16">无有效的根成员</div>';
+        console.log('=== 渲染家族树完成：无根成员 ===');
+        return;
+      }
+      
+      console.log('根成员:', rootMember);
+      
+      // 清空容器
+      container.innerHTML = '';
+      
+      // 设置缩放
+      container.style.transform = `scale(${currentZoom})`;
+      container.style.transformOrigin = 'top left';
+      
+      // 渲染根成员
+      const rootElement = renderMember(rootMember);
+      container.appendChild(rootElement);
+      
+      console.log('=== 渲染家族树完成 ===');
+    }
+
+    // 渲染单个成员
+    function renderMember(member) {
+      console.log('渲染成员:', member.name);
+      
+      const memberElement = document.createElement('div');
+      memberElement.className = 'flex flex-col items-center';
+      
+      // 成员节点
+      const nodeElement = document.createElement('div');
+      nodeElement.className = 'tree-node';
+      nodeElement.innerHTML = `
+        <div class="font-bold">${member.name}</div>
+        <div class="text-sm text-gray-600">${member.gender === 'male' ? '男' : '女'}</div>
+        <div class="text-xs text-gray-500 mt-1">${member.birthDate ? member.birthDate.substring(0, 4) : ''}</div>
+      `;
+      nodeElement.addEventListener('click', () => showMemberDetails(member.id));
+      memberElement.appendChild(nodeElement);
+      
+      // 检查是否有配偶或子女
+      const spouses = familyData.members.filter(m => member.spouseIds.includes(m.id));
+      const children = familyData.members.filter(m => m.fatherId === member.id || m.motherId === member.id);
+      
+      if (spouses.length > 0 || children.length > 0) {
+        // 连接线
+        const connectorElement = document.createElement('div');
+        connectorElement.className = 'tree-connector';
+        memberElement.appendChild(connectorElement);
+        
+        if (spouses.length > 0) {
+          // 配偶容器
+          const spouseContainer = document.createElement('div');
+          spouseContainer.className = 'tree-spouse-container';
+          
+          // 水平连接线
+          const leftLine = document.createElement('div');
+          leftLine.className = 'tree-horizontal-line';
+          spouseContainer.appendChild(leftLine);
+          
+          // 渲染配偶
+          spouses.forEach(spouse => {
+            const spouseElement = renderMember(spouse);
+            spouseContainer.appendChild(spouseElement);
+            
+            // 水平连接线
+            const line = document.createElement('div');
+            line.className = 'tree-horizontal-line';
+            spouseContainer.appendChild(line);
+          });
+          
+          memberElement.appendChild(spouseContainer);
+        }
+        
+        if (children.length > 0) {
+          // 子女容器
+          const childrenContainer = document.createElement('div');
+          childrenContainer.className = 'tree-children-container';
+          
+          children.forEach(child => {
+            const childElement = renderMember(child);
+            childrenContainer.appendChild(childElement);
+          });
+          
+          memberElement.appendChild(childrenContainer);
+        }
+      }
+      
+      return memberElement;
+    }
+
+    // 导出家族数据
+    function exportFamilyData() {
+      const filename = document.getElementById('exportFilename').value || 'family_tree_data';
+      
+      // 准备导出数据
+      const exportData = familyData.members.map(member => {
+        return {
+          'ID': member.id,
+          '姓名': member.name,
+          '性别': member.gender === 'male' ? '男' : '女',
+          '出生日期': member.birthDate || '',
+          '出生时间': member.birthTime || '',
+          '农历生日': member.lunarBirthDate || '',
+          '生辰八字': member.baZi && member.baZi.full ? member.baZi.full : '',
+          '去世日期': member.deathDate || '',
+          '生平简介': member.bio || '',
+          '父亲ID': member.fatherId || '',
+          '母亲ID': member.motherId || '',
+          '配偶ID': member.spouseIds ? member.spouseIds.join(',') : '',
+          '子女ID': member.childrenIds ? member.childrenIds.join(',') : ''
+        };
+      });
+      
+      // 创建工作表
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // 创建工作簿
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '家族成员');
+      
+      // 导出为Excel文件
+      XLSX.writeFile(workbook, filename + '.xlsx');
+    }
+
+    // 下载导入模板
+    function downloadImportTemplate() {
+      // 准备模板数据，包含所有需要用户填写的字段
+      const templateData = [{
+        '姓名': '张三',
+        '性别': '男',
+        '出生日期': '1980-01-01',
+        '出生时间': '12:00',
+        '去世日期': '',
+        '生平简介': '暂无简介',
+        '父亲': '',
+        '母亲': '',
+        '配偶': ''
+      }];
+      
+      // 创建工作表
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      
+      // 创建工作簿
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '家族成员');
+      
+      // 导出为Excel文件
+      XLSX.writeFile(workbook, 'family_tree_import_template.xlsx');
+    }
+
+    // 导入家族数据
+    function importFamilyData() {
+      const fileInput = document.getElementById('importFile');
+      const file = fileInput.files[0];
+      
+      if (!file) {
+        alert('请选择一个文件');
+        return;
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = async function(e) {
+        try {
+          // 读取Excel文件
+          const workbook = XLSX.read(e.target.result, { type: 'binary' });
+          
+          // 获取第一个工作表
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          
+          // 将工作表转换为JSON
+          const membersData = XLSX.utils.sheet_to_json(worksheet);
+          
+          // 处理数据格式，将逗号分隔的字符串转换回数组
+          const processedMembers = membersData.map(member => {
+            // 处理中文标题的字段映射
+            const processedMember = {
+              id: generateId(), // 自动生成ID
+              name: member.name || member['姓名'],
+              gender: member.gender || (member['性别'] === '男' ? 'male' : member['性别'] === '女' ? 'female' : ''),
+              birthDate: member.birthDate || member['出生日期'],
+              birthTime: member.birthTime || member['出生时间'],
+              deathDate: member.deathDate || member['去世日期'],
+              bio: member.bio || member['生平简介'],
+              fatherName: member.father || member['父亲'],
+              motherName: member.mother || member['母亲'],
+              spouseNames: member.spouse || member['配偶'],
+              fatherId: null,
+              motherId: null,
+              spouseIds: [],
+              childrenIds: []
+            };
+            
+            return processedMember;
+          });
+          
+          // 建立姓名到ID的映射，包含系统中已存在的成员
+          const nameToIdMap = {};
+          
+          // 先添加系统中已存在的成员
+          familyData.members.forEach(existingMember => {
+            nameToIdMap[existingMember.name.trim()] = existingMember.id;
+          });
+          
+          // 再添加新导入的成员
+          processedMembers.forEach(member => {
+            nameToIdMap[member.name.trim()] = member.id;
+          });
+          
+          // 记录导入结果
+          const importResults = {
+            success: 0,
+            errors: []
+          };
+          
+          // 根据姓名关联家族关系
+          processedMembers.forEach(member => {
+            let memberErrors = [];
+            
+            // 关联父亲
+            if (member.fatherName) {
+              const fatherName = member.fatherName.trim();
+              if (nameToIdMap[fatherName]) {
+                member.fatherId = nameToIdMap[fatherName];
+              } else if (fatherName) {
+                memberErrors.push(`父亲 "${fatherName}" 未找到`);
+              }
+            }
+            
+            // 关联母亲
+            if (member.motherName) {
+              const motherName = member.motherName.trim();
+              if (nameToIdMap[motherName]) {
+                member.motherId = nameToIdMap[motherName];
+              } else if (motherName) {
+                memberErrors.push(`母亲 "${motherName}" 未找到`);
+              }
+            }
+            
+            // 关联配偶
+            if (member.spouseNames) {
+              const spouseNames = member.spouseNames.split(',').map(name => name.trim()).filter(name => name !== '');
+              spouseNames.forEach(spouseName => {
+                if (nameToIdMap[spouseName]) {
+                  member.spouseIds.push(nameToIdMap[spouseName]);
+                } else {
+                  memberErrors.push(`配偶 "${spouseName}" 未找到`);
+                }
+              });
+            }
+            
+            // 清理临时字段
+            delete member.fatherName;
+            delete member.motherName;
+            delete member.spouseNames;
+            
+            // 记录结果
+            importResults.success++;
+            if (memberErrors.length > 0) {
+              importResults.errors.push({
+                name: member.name,
+                errors: memberErrors
+              });
+            }
+          });
+          
+          // 构建家族数据
+          const importedData = {
+            members: processedMembers,
+            rootMemberId: processedMembers.length > 0 ? processedMembers[0].id : null,
+            lastUpdated: new Date().toISOString()
+          };
+          
+          // 验证数据格式
+          if (!importedData.members || !Array.isArray(importedData.members)) {
+            throw new Error('无效的数据格式');
+          }
+          
+          // 更新数据
+          familyData = importedData;
+          familyData.lastUpdated = new Date().toISOString();
+          
+          // 为每个成员计算生辰八字
+          for (const member of familyData.members) {
+            if (member.birthDate) {
+              const baZi = await calculateBaZi(member.birthDate, member.birthTime);
+              if (baZi) {
+                member.baZi = baZi;
+              }
+            }
+          }
+          
+          // 保存数据
+          saveFamilyData();
+          updateMembersList();
+          updateRelationsSelects();
+          
+          // 渲染家族树
+          if (familyData.members.length > 0) {
+            document.getElementById('initialPrompt').classList.add('hidden');
+            renderFamilyTree();
+          }
+          
+          // 显示导入结果
+          let resultMessage = `导入完成！\n成功: ${importResults.success} 条`;
+          
+          if (importResults.errors.length > 0) {
+            resultMessage += '\n\n注意事项:';
+            importResults.errors.forEach(error => {
+              resultMessage += `\n- ${error.name}: ${error.errors.join(', ')}`;
+            });
+          }
+          
+          alert(resultMessage);
+        } catch (error) {
+          console.error('导入失败:', error);
+          document.getElementById('importError').textContent = '导入失败: ' + error.message;
+          document.getElementById('importError').classList.remove('hidden');
+        }
+      };
+      
+      reader.readAsBinaryString(file);
+    }
+
+    // 事件监听器
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM 加载完成');
+      
+      // 初始化应用
+      initApp();
+      
+      // 添加成员按钮
+      document.getElementById('addMemberBtn').addEventListener('click', function() {
+        document.getElementById('memberId').value = '';
+        document.getElementById('name').value = '';
+        document.querySelector('input[name="gender"][value="male"]').checked = true;
+        document.getElementById('birthDate').value = '';
+        document.getElementById('birthTime').value = '';
+        document.getElementById('deathDate').value = '';
+        document.getElementById('bio').value = '';
+        document.getElementById('fatherId').value = '';
+        document.getElementById('motherId').value = '';
+        const spouseSelect = document.getElementById('spouseIds');
+        Array.from(spouseSelect.options).forEach(option => {
+          option.selected = false;
+        });
+        document.getElementById('modalTitle').textContent = '添加成员';
+        document.getElementById('memberModal').classList.remove('hidden');
+      });
+      
+      // 添加第一个成员按钮
+      document.getElementById('addFirstMemberBtn').addEventListener('click', function() {
+        document.getElementById('memberId').value = '';
+        document.getElementById('name').value = '';
+        document.querySelector('input[name="gender"][value="male"]').checked = true;
+        document.getElementById('birthDate').value = '';
+        document.getElementById('birthTime').value = '';
+        document.getElementById('deathDate').value = '';
+        document.getElementById('bio').value = '';
+        document.getElementById('fatherId').value = '';
+        document.getElementById('motherId').value = '';
+        const spouseSelect = document.getElementById('spouseIds');
+        Array.from(spouseSelect.options).forEach(option => {
+          option.selected = false;
+        });
+        document.getElementById('modalTitle').textContent = '添加成员';
+        document.getElementById('memberModal').classList.remove('hidden');
+      });
+      
+      // 关闭模态框按钮
+      document.getElementById('closeModalBtn').addEventListener('click', function() {
+        document.getElementById('memberModal').classList.add('hidden');
+      });
+      
+      // 取消按钮
+      document.getElementById('cancelBtn').addEventListener('click', function() {
+        document.getElementById('memberModal').classList.add('hidden');
+      });
+      
+      // 成员表单提交
+      document.getElementById('memberForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const memberData = {
+          id: document.getElementById('memberId').value,
+          name: document.getElementById('name').value,
+          gender: document.querySelector('input[name="gender"]:checked').value,
+          birthDate: document.getElementById('birthDate').value,
+          birthTime: document.getElementById('birthTime').value,
+          deathDate: document.getElementById('deathDate').value,
+          bio: document.getElementById('bio').value,
+          fatherId: document.getElementById('fatherId').value,
+          motherId: document.getElementById('motherId').value,
+          spouseIds: Array.from(document.getElementById('spouseIds').selectedOptions).map(option => option.value)
+        };
+        
+        saveMember(memberData);
+        document.getElementById('memberModal').classList.add('hidden');
+      });
+      
+      // 关闭详情模态框按钮
+      document.getElementById('closeDetailModalBtn').addEventListener('click', function() {
+        document.getElementById('memberDetailModal').classList.add('hidden');
+      });
+      
+      // 关闭详情按钮
+      document.getElementById('closeDetailBtn').addEventListener('click', function() {
+        document.getElementById('memberDetailModal').classList.add('hidden');
+      });
+      
+      // 编辑成员按钮
+      document.getElementById('editMemberBtn').addEventListener('click', function() {
+        if (selectedMemberId) {
+          editMember(selectedMemberId);
+          document.getElementById('memberDetailModal').classList.add('hidden');
+        }
+      });
+      
+      // 删除成员按钮
+      document.getElementById('deleteMemberBtn').addEventListener('click', function() {
+        if (selectedMemberId) {
+          if (confirm('确定要删除这个成员吗？')) {
+            deleteMember(selectedMemberId);
+          }
+        }
+      });
+      
+      // 导出按钮
+      document.getElementById('exportBtn').addEventListener('click', function() {
+        document.getElementById('exportModal').classList.remove('hidden');
+      });
+      
+      // 关闭导出模态框按钮
+      document.getElementById('closeExportModalBtn').addEventListener('click', function() {
+        document.getElementById('exportModal').classList.add('hidden');
+      });
+      
+      // 导出确认按钮
+      document.getElementById('exportConfirmBtn').addEventListener('click', function() {
+        exportFamilyData();
+        document.getElementById('exportModal').classList.add('hidden');
+      });
+      
+      // 导入按钮
+      document.getElementById('importBtn').addEventListener('click', function() {
+        document.getElementById('importError').classList.add('hidden');
+        document.getElementById('importModal').classList.remove('hidden');
+      });
+      
+      // 关闭导入模态框按钮
+      document.getElementById('closeImportModalBtn').addEventListener('click', function() {
+        document.getElementById('importModal').classList.add('hidden');
+      });
+      
+      // 下载模板按钮
+      document.getElementById('downloadTemplateBtn').addEventListener('click', function() {
+        downloadImportTemplate();
+      });
+      
+      // 导入确认按钮
+      document.getElementById('importConfirmBtn').addEventListener('click', function() {
+        importFamilyData();
+      });
+      
+      // 缩放按钮
+      document.getElementById('zoomInBtn').addEventListener('click', function() {
+        currentZoom += 0.1;
+        renderFamilyTree();
+      });
+      
+      document.getElementById('zoomOutBtn').addEventListener('click', function() {
+        currentZoom = Math.max(0.5, currentZoom - 0.1);
+        renderFamilyTree();
+      });
+      
+      document.getElementById('resetZoomBtn').addEventListener('click', function() {
+        currentZoom = 1;
+        renderFamilyTree();
+      });
+      
+      // 上传照片按钮
+      document.getElementById('uploadPhotoBtn').addEventListener('click', function() {
+        document.getElementById('photoInput').click();
+      });
+      
+      // 照片选择
+      document.getElementById('photoInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const photoPreview = document.getElementById('photoPreview');
+            photoPreview.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+            currentPhoto = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+      
+      // 保存照片按钮
+      document.getElementById('savePhotoBtn').addEventListener('click', function() {
+        if (selectedMemberId && currentPhoto) {
+          const member = familyData.members.find(m => m.id === selectedMemberId);
+          if (member) {
+            member.photo = currentPhoto;
+            saveFamilyData();
+            showMemberDetails(selectedMemberId);
+            document.getElementById('photoEditorModal').classList.add('hidden');
+            showMessage('照片保存成功！');
+          }
+        }
+      });
+      
+      // 取消照片按钮
+      document.getElementById('cancelPhotoBtn').addEventListener('click', function() {
+        document.getElementById('photoEditorModal').classList.add('hidden');
+        currentPhoto = null;
+      });
+      
+      // 关闭照片编辑器按钮
+      document.getElementById('closePhotoEditorBtn').addEventListener('click', function() {
+        document.getElementById('photoEditorModal').classList.add('hidden');
+        currentPhoto = null;
+      });
+      
+      console.log('事件监听器添加完成');
+    });
+  </script>
+</body>
+</html>
