@@ -2,4 +2,6 @@ Flask
 Flask-CORS
 supabase
 lunar-python
-dotenv
+python-dotenv
+bcrypt
+PyJWT

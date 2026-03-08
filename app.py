@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import os
 import json
+import bcrypt
+import jwt
+from functools import wraps
 
 # 加载环境变量
 from dotenv import load_dotenv
@@ -32,6 +35,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# JWT配置
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-here')
+JWT_EXPIRATION_DAYS = 7
+
 # 初始化数据库
 def init_db():
     # Supabase数据库初始化由Supabase Dashboard处理
@@ -45,6 +52,171 @@ def init_db():
 
 # 初始化数据库
 init_db()
+
+# JWT认证辅助函数
+def generate_token(user_id):
+    """生成JWT token"""
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(days=JWT_EXPIRATION_DAYS),
+        'iat': datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def verify_token(token):
+    """验证JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        return payload['user_id']
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def get_current_user():
+    """从请求中获取当前用户ID"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return None
+    
+    try:
+        token = auth_header.split(' ')[1]  # Bearer <token>
+        return verify_token(token)
+    except IndexError:
+        return None
+
+def login_required(f):
+    """登录验证装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = get_current_user()
+        if not user_id:
+            return jsonify({'error': '请先登录'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ==================== 用户认证API ====================
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """用户注册"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '请求数据不能为空'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        username = data.get('username', '').strip()
+        
+        # 验证必填字段
+        if not email:
+            return jsonify({'error': '请输入邮箱'}), 400
+        if not password:
+            return jsonify({'error': '请输入密码'}), 400
+        if len(password) < 6:
+            return jsonify({'error': '密码长度至少6位'}), 400
+        
+        # 检查邮箱是否已存在
+        existing_user = supabase.table('users').select('*').eq('email', email).execute()
+        if existing_user.data:
+            return jsonify({'error': '该邮箱已被注册'}), 409
+        
+        # 哈希密码
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # 创建用户
+        user_data = {
+            'email': email,
+            'password_hash': password_hash,
+            'username': username or email.split('@')[0]
+        }
+        
+        result = supabase.table('users').insert(user_data).execute()
+        user = result.data[0]
+        
+        # 生成token
+        token = generate_token(user['id'])
+        
+        return jsonify({
+            'message': '注册成功',
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'username': user['username']
+            }
+        }), 201
+        
+    except Exception as e:
+        print(f'注册失败: {str(e)}')
+        return jsonify({'error': '注册失败，请稍后重试'}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """用户登录"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '请求数据不能为空'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        # 验证必填字段
+        if not email:
+            return jsonify({'error': '请输入邮箱'}), 400
+        if not password:
+            return jsonify({'error': '请输入密码'}), 400
+        
+        # 查找用户
+        result = supabase.table('users').select('*').eq('email', email).execute()
+        if not result.data:
+            return jsonify({'error': '邮箱或密码错误'}), 401
+        
+        user = result.data[0]
+        
+        # 验证密码
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+            return jsonify({'error': '邮箱或密码错误'}), 401
+        
+        # 生成token
+        token = generate_token(user['id'])
+        
+        return jsonify({
+            'message': '登录成功',
+            'token': token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'username': user['username']
+            }
+        })
+        
+    except Exception as e:
+        print(f'登录失败: {str(e)}')
+        return jsonify({'error': '登录失败，请稍后重试'}), 500
+
+@app.route('/api/auth/me', methods=['GET'])
+@login_required
+def get_current_user_info():
+    """获取当前用户信息"""
+    try:
+        user_id = get_current_user()
+        result = supabase.table('users').select('id,email,username,created_at').eq('id', user_id).execute()
+        
+        if not result.data:
+            return jsonify({'error': '用户不存在'}), 404
+        
+        return jsonify({
+            'user': result.data[0]
+        })
+        
+    except Exception as e:
+        print(f'获取用户信息失败: {str(e)}')
+        return jsonify({'error': '获取用户信息失败'}), 500
+
+# ==================== 八字计算API ====================
 
 @app.route('/api/calculate-bazi', methods=['POST'])
 def api_calculate_bazi():
@@ -91,18 +263,22 @@ def api_calculate_bazi():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/members', methods=['GET'])
+@login_required
 def get_members():
     try:
-        # 从Supabase获取所有成员
-        members_response = supabase.table('members').select('*').execute()
+        # 获取当前用户ID
+        user_id = get_current_user()
+        
+        # 从Supabase获取当前用户的成员
+        members_response = supabase.table('members').select('*').eq('user_id', user_id).execute()
         members_data = members_response.data
         
-        # 从Supabase获取所有配偶关系
-        spouses_response = supabase.table('spouses').select('*').execute()
+        # 从Supabase获取当前用户的配偶关系
+        spouses_response = supabase.table('spouses').select('*').eq('user_id', user_id).execute()
         spouses_data = spouses_response.data
         
-        # 从Supabase获取所有子女关系
-        children_response = supabase.table('children').select('*').execute()
+        # 从Supabase获取当前用户的子女关系
+        children_response = supabase.table('children').select('*').eq('user_id', user_id).execute()
         children_data = children_response.data
         
         members = []
@@ -180,8 +356,12 @@ def get_members():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/members', methods=['POST'])
+@login_required
 def create_member():
     try:
+        # 获取当前用户ID
+        user_id = get_current_user()
+        
         data = request.json
         if not data or 'name' not in data or 'gender' not in data:
             return jsonify({'error': '缺少必要参数'}), 400
@@ -234,7 +414,8 @@ def create_member():
             'photo': data.get('photo'),
             'bio': data.get('bio'),
             'father_id': data.get('fatherId'),
-            'mother_id': data.get('motherId')
+            'mother_id': data.get('motherId'),
+            'user_id': user_id  # 关联当前用户
         }
         
         # 插入成员
@@ -246,13 +427,15 @@ def create_member():
                 # 插入配偶关系
                 supabase.table('spouses').insert({
                     'member_id': data.get('id'),
-                    'spouse_id': spouse_id
+                    'spouse_id': spouse_id,
+                    'user_id': user_id
                 }).execute()
                 
                 # 插入反向配偶关系
                 supabase.table('spouses').insert({
                     'member_id': spouse_id,
-                    'spouse_id': data.get('id')
+                    'spouse_id': data.get('id'),
+                    'user_id': user_id
                 }).execute()
         
         # 处理子女关系 - 这里需要在前端或其他地方处理
@@ -262,8 +445,17 @@ def create_member():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/members/<member_id>', methods=['PUT'])
+@login_required
 def update_member(member_id):
     try:
+        # 获取当前用户ID
+        user_id = get_current_user()
+        
+        # 验证成员是否属于当前用户
+        member_check = supabase.table('members').select('id').eq('id', member_id).eq('user_id', user_id).execute()
+        if not member_check.data:
+            return jsonify({'error': '无权修改此成员'}), 403
+        
         data = request.json
         if not data:
             return jsonify({'error': '缺少必要参数'}), 400
@@ -330,7 +522,8 @@ def update_member(member_id):
                 # 插入配偶关系
                 supabase.table('spouses').insert({
                     'member_id': member_id,
-                    'spouse_id': spouse_id
+                    'spouse_id': spouse_id,
+                    'user_id': user_id
                 }).execute()
                 
                 # 确保反向配偶关系存在
@@ -339,7 +532,8 @@ def update_member(member_id):
                 # 插入新的反向配偶关系
                 supabase.table('spouses').insert({
                     'member_id': spouse_id,
-                    'spouse_id': member_id
+                    'spouse_id': member_id,
+                    'user_id': user_id
                 }).execute()
         
         return jsonify({'message': '成员更新成功'})
@@ -347,8 +541,17 @@ def update_member(member_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/members/<member_id>', methods=['DELETE'])
+@login_required
 def delete_member(member_id):
     try:
+        # 获取当前用户ID
+        user_id = get_current_user()
+        
+        # 验证成员是否属于当前用户
+        member_check = supabase.table('members').select('id').eq('id', member_id).eq('user_id', user_id).execute()
+        if not member_check.data:
+            return jsonify({'error': '无权删除此成员'}), 403
+        
         # 删除相关的配偶关系
         # 删除以该成员为member_id的配偶关系
         supabase.table('spouses').delete().eq('member_id', member_id).execute()

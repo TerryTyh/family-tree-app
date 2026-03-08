@@ -161,6 +161,26 @@
         <button id="exportBtn" class="bg-transparent border border-white px-3 py-1 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-10 transition-colors">
           <i class="fa fa-download mr-1"></i> 导出
         </button>
+        
+        <button id="loginBtn" class="bg-accent text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-opacity-90 transition-colors">
+          <i class="fa fa-user mr-1"></i> 登录
+        </button>
+        
+        <div id="userMenu" class="hidden relative">
+          <button id="userMenuBtn" class="flex items-center space-x-2 text-white hover:text-secondary transition-colors">
+            <i class="fa fa-user-circle text-xl"></i>
+            <span id="userName" class="text-sm"></span>
+            <i class="fa fa-caret-down"></i>
+          </button>
+          <div id="userDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+            <a href="#" id="profileLink" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+              <i class="fa fa-user mr-2"></i> 个人中心
+            </a>
+            <a href="#" id="logoutLink" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+              <i class="fa fa-sign-out mr-2"></i> 退出登录
+            </a>
+          </div>
+        </div>
       </div>
       
       <button id="mobileMenuBtn" class="md:hidden text-white focus:outline-none">
@@ -483,6 +503,57 @@
 
 
 
+  <!-- 登录/注册弹窗 -->
+  <div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-6">
+          <h3 id="authTitle" class="text-xl font-semibold text-gray-800">登录</h3>
+          <button id="closeAuthModal" class="text-gray-400 hover:text-gray-600 transition-colors">
+            <i class="fa fa-times text-xl"></i>
+          </button>
+        </div>
+        
+        <form id="authForm" class="space-y-4">
+          <div>
+            <label for="authEmail" class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+            <input type="email" id="authEmail" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" placeholder="请输入邮箱">
+          </div>
+          
+          <div>
+            <label for="authPassword" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+            <input type="password" id="authPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" placeholder="请输入密码">
+          </div>
+          
+          <div id="authUsernameGroup" class="hidden">
+            <label for="authUsername" class="block text-sm font-medium text-gray-700 mb-1">用户名（可选）</label>
+            <input type="text" id="authUsername" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" placeholder="请输入用户名">
+          </div>
+          
+          <div id="authConfirmPasswordGroup" class="hidden">
+            <label for="authConfirmPassword" class="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+            <input type="password" id="authConfirmPassword" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary" placeholder="请再次输入密码">
+          </div>
+          
+          <div id="authError" class="text-red-500 text-sm hidden"></div>
+          
+          <button type="submit" id="authSubmitBtn" class="w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors font-medium">
+            登录
+          </button>
+        </form>
+        
+        <div class="mt-4 text-center">
+          <p class="text-sm text-gray-600">
+            <span id="authSwitchText">还没有账号？</span>
+            <button type="button" id="authSwitchBtn" class="text-primary hover:text-accent font-medium ml-1">
+              立即注册
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 导入/导出弹窗 -->
   <div id="importExportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
@@ -552,6 +623,187 @@
     let lines = [];
     let importExportMode = 'import'; // 'import' 或 'export'
     
+    // 用户认证相关变量
+    let currentUser = null;
+    let authToken = localStorage.getItem('authToken') || null;
+    
+    // ==================== 用户认证功能 ====================
+    
+    // 获取认证头部
+    function getAuthHeaders() {
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      return headers;
+    }
+    
+    // 检查登录状态
+    function checkAuthStatus() {
+      if (authToken) {
+        // 验证token并获取用户信息
+        fetch(`${config.apiBaseUrl}/api/auth/me`, {
+          method: 'GET',
+          headers: getAuthHeaders()
+        })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('Token无效');
+          }
+        })
+        .then(data => {
+          currentUser = data.user;
+          updateUIForLoggedInUser();
+          loadFamilyData();
+        })
+        .catch(error => {
+          console.log('登录状态检查失败:', error);
+          logout();
+        });
+      } else {
+        showLoginButton();
+      }
+    }
+    
+    // 更新UI为已登录状态
+    function updateUIForLoggedInUser() {
+      document.getElementById('loginBtn').classList.add('hidden');
+      document.getElementById('userMenu').classList.remove('hidden');
+      document.getElementById('userName').textContent = currentUser.username || currentUser.email;
+    }
+    
+    // 显示登录按钮
+    function showLoginButton() {
+      document.getElementById('loginBtn').classList.remove('hidden');
+      document.getElementById('userMenu').classList.add('hidden');
+    }
+    
+    // 登录
+    async function login(email, password) {
+      try {
+        const response = await fetch(`${config.apiBaseUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          authToken = data.token;
+          currentUser = data.user;
+          localStorage.setItem('authToken', authToken);
+          updateUIForLoggedInUser();
+          closeAuthModal();
+          loadFamilyData();
+          return { success: true };
+        } else {
+          return { success: false, error: data.error || '登录失败' };
+        }
+      } catch (error) {
+        console.error('登录请求失败:', error);
+        return { success: false, error: '网络错误，请稍后重试' };
+      }
+    }
+    
+    // 注册
+    async function register(email, password, username) {
+      try {
+        const response = await fetch(`${config.apiBaseUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password, username })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          authToken = data.token;
+          currentUser = data.user;
+          localStorage.setItem('authToken', authToken);
+          updateUIForLoggedInUser();
+          closeAuthModal();
+          loadFamilyData();
+          return { success: true };
+        } else {
+          return { success: false, error: data.error || '注册失败' };
+        }
+      } catch (error) {
+        console.error('注册请求失败:', error);
+        return { success: false, error: '网络错误，请稍后重试' };
+      }
+    }
+    
+    // 退出登录
+    function logout() {
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem('authToken');
+      showLoginButton();
+      familyData = {
+        members: [],
+        rootMemberId: null,
+        lastUpdated: new Date().toISOString()
+      };
+      renderFamilyTree();
+    }
+    
+    // 打开登录弹窗
+    function openAuthModal(mode = 'login') {
+      const modal = document.getElementById('authModal');
+      const title = document.getElementById('authTitle');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const switchText = document.getElementById('authSwitchText');
+      const switchBtn = document.getElementById('authSwitchBtn');
+      const usernameGroup = document.getElementById('authUsernameGroup');
+      const confirmPasswordGroup = document.getElementById('authConfirmPasswordGroup');
+      const errorDiv = document.getElementById('authError');
+      
+      // 重置表单
+      document.getElementById('authForm').reset();
+      errorDiv.classList.add('hidden');
+      
+      if (mode === 'login') {
+        title.textContent = '登录';
+        submitBtn.textContent = '登录';
+        switchText.textContent = '还没有账号？';
+        switchBtn.textContent = '立即注册';
+        usernameGroup.classList.add('hidden');
+        confirmPasswordGroup.classList.add('hidden');
+      } else {
+        title.textContent = '注册';
+        submitBtn.textContent = '注册';
+        switchText.textContent = '已有账号？';
+        switchBtn.textContent = '立即登录';
+        usernameGroup.classList.remove('hidden');
+        confirmPasswordGroup.classList.remove('hidden');
+      }
+      
+      modal.classList.remove('hidden');
+      modal.dataset.mode = mode;
+    }
+    
+    // 关闭登录弹窗
+    function closeAuthModal() {
+      document.getElementById('authModal').classList.add('hidden');
+    }
+    
+    // 切换登录/注册模式
+    function switchAuthMode() {
+      const modal = document.getElementById('authModal');
+      const currentMode = modal.dataset.mode;
+      const newMode = currentMode === 'login' ? 'register' : 'login';
+      openAuthModal(newMode);
+    }
+    
     // 测试数据库功能
     function testDatabase() {
       console.log('开始测试数据库功能...');
@@ -609,6 +861,10 @@
         // 初始化照片编辑器
         console.log('初始化照片编辑器');
         initPhotoEditor();
+        
+        // 检查登录状态
+        console.log('检查登录状态');
+        checkAuthStatus();
         
         // 加载数据并在完成后更新UI
         console.log('开始加载家族数据');
@@ -807,6 +1063,102 @@
       canvas.addEventListener('touchstart', handleTouchStart);
       canvas.addEventListener('touchmove', handleTouchMove);
       canvas.addEventListener('touchend', handleTouchEnd);
+      
+      // ==================== 用户认证事件监听 ====================
+      
+      // 登录按钮
+      document.getElementById('loginBtn').addEventListener('click', function() {
+        openAuthModal('login');
+      });
+      
+      // 关闭登录弹窗
+      document.getElementById('closeAuthModal').addEventListener('click', closeAuthModal);
+      
+      // 点击弹窗外部关闭
+      document.getElementById('authModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+          closeAuthModal();
+        }
+      });
+      
+      // 切换登录/注册模式
+      document.getElementById('authSwitchBtn').addEventListener('click', switchAuthMode);
+      
+      // 登录/注册表单提交
+      document.getElementById('authForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const email = document.getElementById('authEmail').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const username = document.getElementById('authUsername').value.trim();
+        const confirmPassword = document.getElementById('authConfirmPassword').value;
+        const mode = document.getElementById('authModal').dataset.mode;
+        const errorDiv = document.getElementById('authError');
+        
+        // 验证输入
+        if (!email || !password) {
+          errorDiv.textContent = '请填写邮箱和密码';
+          errorDiv.classList.remove('hidden');
+          return;
+        }
+        
+        if (mode === 'register') {
+          if (password !== confirmPassword) {
+            errorDiv.textContent = '两次输入的密码不一致';
+            errorDiv.classList.remove('hidden');
+            return;
+          }
+          if (password.length < 6) {
+            errorDiv.textContent = '密码长度至少6位';
+            errorDiv.classList.remove('hidden');
+            return;
+          }
+        }
+        
+        // 显示loading
+        const submitBtn = document.getElementById('authSubmitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = mode === 'login' ? '登录中...' : '注册中...';
+        submitBtn.disabled = true;
+        
+        let result;
+        if (mode === 'login') {
+          result = await login(email, password);
+        } else {
+          result = await register(email, password, username);
+        }
+        
+        // 恢复按钮状态
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+        
+        if (!result.success) {
+          errorDiv.textContent = result.error;
+          errorDiv.classList.remove('hidden');
+        }
+      });
+      
+      // 用户菜单下拉
+      document.getElementById('userMenuBtn').addEventListener('click', function() {
+        const dropdown = document.getElementById('userDropdown');
+        dropdown.classList.toggle('hidden');
+      });
+      
+      // 点击外部关闭下拉菜单
+      document.addEventListener('click', function(e) {
+        const userMenu = document.getElementById('userMenu');
+        const dropdown = document.getElementById('userDropdown');
+        if (!userMenu.contains(e.target)) {
+          dropdown.classList.add('hidden');
+        }
+      });
+      
+      // 退出登录
+      document.getElementById('logoutLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        logout();
+        document.getElementById('userDropdown').classList.add('hidden');
+      });
     }
     
     // 显示成员列表面板
@@ -1604,9 +1956,7 @@
           // 添加新成员
           response = await fetch(`${config.apiBaseUrl}/api/members`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify(formData)
           });
         } else {
@@ -1614,9 +1964,7 @@
           const memberId = formData.id;
           response = await fetch(`${config.apiBaseUrl}/api/members/${memberId}`, {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify(formData)
           });
         }
@@ -1681,9 +2029,7 @@
         // 通过API删除成员
         const response = await fetch(`${config.apiBaseUrl}/api/members/${memberId}`, {
           method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: getAuthHeaders()
         });
         
         if (!response.ok) {
@@ -3024,14 +3370,34 @@
     // 从API加载家族数据
     function loadFamilyData() {
       return new Promise((resolve, reject) => {
+        // 检查是否已登录
+        if (!authToken) {
+          console.log('用户未登录，跳过加载数据');
+          familyData = {
+            members: [],
+            rootMemberId: null,
+            lastUpdated: new Date().toISOString()
+          };
+          resolve(familyData);
+          return;
+        }
+        
         // 从API获取数据
         const apiUrl = `${config.apiBaseUrl}/api/members`;
         console.log('发送API请求到:', apiUrl);
         
-        fetch(apiUrl)
+        fetch(apiUrl, {
+          headers: getAuthHeaders()
+        })
           .then(response => {
             console.log('API响应状态:', response.status);
-            console.log('API响应头部:', response.headers);
+            
+            if (response.status === 401) {
+              // Token过期或无效，退出登录
+              console.log('认证失败，退出登录');
+              logout();
+              throw new Error('请先登录');
+            }
             
             if (!response.ok) {
               throw new Error(`API调用失败: ${response.status}`);
