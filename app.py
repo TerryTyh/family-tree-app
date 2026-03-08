@@ -4,7 +4,11 @@ from flask_cors import CORS
 from datetime import datetime
 import sys
 import os
-import sqlite3
+import json
+
+# 加载环境变量
+from dotenv import load_dotenv
+load_dotenv()
 
 # 添加src目录到Python路径
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -12,49 +16,32 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from bazi_calculator import calculate_bazi
 from lunar_python import Solar
 
+# 导入Supabase客户端
+from supabase import create_client, Client
+
 app = Flask(__name__)
 CORS(app)
 
-# 数据库连接函数
-def get_db_connection():
-    conn = sqlite3.connect('data/members.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+# Supabase配置
+import os
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError('Supabase配置缺失，请设置环境变量SUPABASE_URL和SUPABASE_KEY')
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # 初始化数据库
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # 创建成员表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS members (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            gender TEXT,
-            birth_date TEXT,
-            birth_time TEXT,
-            ba_zi TEXT,
-            lunar_birth_date TEXT,
-            death_date TEXT,
-            photo TEXT,
-            bio TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    # 创建关系表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS relations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id TEXT NOT NULL,
-            relation_type TEXT NOT NULL,
-            related_member_id TEXT NOT NULL,
-            FOREIGN KEY (member_id) REFERENCES members(id),
-            FOREIGN KEY (related_member_id) REFERENCES members(id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    # Supabase数据库初始化由Supabase Dashboard处理
+    # 这里只做简单的连接测试
+    try:
+        # 测试连接
+        response = supabase.table('members').select('*').limit(1).execute()
+        print('Supabase连接成功')
+    except Exception as e:
+        print(f'Supabase连接失败: {e}')
 
 # 初始化数据库
 init_db()
@@ -106,20 +93,26 @@ def api_calculate_bazi():
 @app.route('/api/members', methods=['GET'])
 def get_members():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # 从Supabase获取所有成员
+        members_response = supabase.table('members').select('*').execute()
+        members_data = members_response.data
         
-        # 获取所有成员
-        cursor.execute('SELECT * FROM members')
+        # 从Supabase获取所有配偶关系
+        spouses_response = supabase.table('spouses').select('*').execute()
+        spouses_data = spouses_response.data
+        
+        # 从Supabase获取所有子女关系
+        children_response = supabase.table('children').select('*').execute()
+        children_data = children_response.data
+        
         members = []
-        for row in cursor.fetchall():
-            member = dict(row)
+        for member in members_data:
             # 处理baZi数据，转换为对象格式
             ba_zi_str = member.get('ba_zi')
             if ba_zi_str:
                 # 尝试解析八字为四柱
                 try:
-                    if len(ba_zi_str) >= 8:
+                    if isinstance(ba_zi_str, str) and len(ba_zi_str) >= 8:
                         member['baZi'] = {
                             'year': ba_zi_str[0:2],
                             'month': ba_zi_str[2:4],
@@ -152,35 +145,38 @@ def get_members():
             if 'death_date' in member:
                 member['deathDate'] = member['death_date']
                 del member['death_date']
-            # 获取成员的关系
-            cursor.execute('SELECT relation_type, related_member_id FROM relations WHERE member_id = ?', (member['id'],))
-            relations = cursor.fetchall()
-            
             # 构建关系字典
             member_relations = {
-                'fatherId': None,
-                'motherId': None,
+                'fatherId': member.get('father_id'),
+                'motherId': member.get('mother_id'),
                 'spouseIds': [],
                 'childrenIds': []
             }
             
-            for rel in relations:
-                if rel['relation_type'] == 'father':
-                    member_relations['fatherId'] = rel['related_member_id']
-                elif rel['relation_type'] == 'mother':
-                    member_relations['motherId'] = rel['related_member_id']
-                elif rel['relation_type'] == 'spouse':
-                    member_relations['spouseIds'].append(rel['related_member_id'])
-                elif rel['relation_type'] == 'child':
-                    member_relations['childrenIds'].append(rel['related_member_id'])
+            # 处理配偶关系
+            for spouse in spouses_data:
+                if spouse['member_id'] == member['id']:
+                    member_relations['spouseIds'].append(spouse['spouse_id'])
+            
+            # 处理子女关系
+            for child in children_data:
+                if child['parent_id'] == member['id']:
+                    member_relations['childrenIds'].append(child['child_id'])
             
             # 合并关系到成员数据
             member.update(member_relations)
+            # 移除不需要的字段
+            if 'father_id' in member:
+                del member['father_id']
+            if 'mother_id' in member:
+                del member['mother_id']
             members.append(member)
         
-        conn.close()
+        # 打印返回的数据，用于调试
+        print(f'返回成员数据数量: {len(members)}')
         return jsonify({'members': members})
     except Exception as e:
+        print(f'获取成员数据失败: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/members', methods=['POST'])
@@ -190,12 +186,29 @@ def create_member():
         if not data or 'name' not in data or 'gender' not in data:
             return jsonify({'error': '缺少必要参数'}), 400
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         # 处理baZi数据
         ba_zi_data = data.get('baZi')
         ba_zi_str = ba_zi_data.get('full') if isinstance(ba_zi_data, dict) else str(ba_zi_data) if ba_zi_data else None
+        
+        # 如果没有baZi数据，尝试根据出生日期和时间计算
+        if not ba_zi_str and data.get('birthDate'):
+            try:
+                # 构建完整的出生日期时间字符串
+                birth_date = data.get('birthDate')
+                birth_time = data.get('birthTime', '12:00:00')
+                birth_time_str = f"{birth_date} {birth_time}"
+                
+                # 解析出生时间
+                if ' ' in birth_time_str:
+                    birth_time_obj = datetime.strptime(birth_time_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    birth_time_obj = datetime.strptime(birth_time_str, '%Y-%m-%d')
+                
+                # 计算生辰八字
+                ba_zi_str = calculate_bazi(birth_time_obj, 120.0)
+                print(f'自动计算生辰八字: {ba_zi_str}')
+            except Exception as e:
+                print(f'自动计算生辰八字失败: {str(e)}')
         
         # 计算农历生日
         lunar_birth_date = None
@@ -208,45 +221,41 @@ def create_member():
             except Exception:
                 pass
         
-        # 插入成员数据
-        cursor.execute('''
-            INSERT INTO members (id, name, gender, birth_date, birth_time, ba_zi, lunar_birth_date, death_date, photo, bio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data.get('id'),
-            data.get('name'),
-            data.get('gender'),
-            data.get('birthDate'),
-            data.get('birthTime'),
-            ba_zi_str,
-            lunar_birth_date,
-            data.get('deathDate'),
-            data.get('photo'),
-            data.get('bio')
-        ))
+        # 插入成员数据到Supabase
+        member_data = {
+            'id': data.get('id'),
+            'name': data.get('name'),
+            'gender': data.get('gender'),
+            'birth_date': data.get('birthDate'),
+            'birth_time': data.get('birthTime'),
+            'ba_zi': ba_zi_str,
+            'lunar_birth_date': lunar_birth_date,
+            'death_date': data.get('deathDate'),
+            'photo': data.get('photo'),
+            'bio': data.get('bio'),
+            'father_id': data.get('fatherId'),
+            'mother_id': data.get('motherId')
+        }
         
-        # 处理关系数据
-        if 'fatherId' in data and data['fatherId']:
-            cursor.execute('''
-                INSERT INTO relations (member_id, relation_type, related_member_id)
-                VALUES (?, ?, ?)
-            ''', (data.get('id'), 'father', data['fatherId']))
+        # 插入成员
+        supabase.table('members').insert(member_data).execute()
         
-        if 'motherId' in data and data['motherId']:
-            cursor.execute('''
-                INSERT INTO relations (member_id, relation_type, related_member_id)
-                VALUES (?, ?, ?)
-            ''', (data.get('id'), 'mother', data['motherId']))
-        
+        # 处理配偶关系
         if 'spouseIds' in data and data['spouseIds']:
             for spouse_id in data['spouseIds']:
-                cursor.execute('''
-                    INSERT INTO relations (member_id, relation_type, related_member_id)
-                    VALUES (?, ?, ?)
-                ''', (data.get('id'), 'spouse', spouse_id))
+                # 插入配偶关系
+                supabase.table('spouses').insert({
+                    'member_id': data.get('id'),
+                    'spouse_id': spouse_id
+                }).execute()
+                
+                # 插入反向配偶关系
+                supabase.table('spouses').insert({
+                    'member_id': spouse_id,
+                    'spouse_id': data.get('id')
+                }).execute()
         
-        conn.commit()
-        conn.close()
+        # 处理子女关系 - 这里需要在前端或其他地方处理
         
         return jsonify({'message': '成员创建成功'})
     except Exception as e:
@@ -259,12 +268,29 @@ def update_member(member_id):
         if not data:
             return jsonify({'error': '缺少必要参数'}), 400
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         # 处理baZi数据
         ba_zi_data = data.get('baZi')
         ba_zi_str = ba_zi_data.get('full') if isinstance(ba_zi_data, dict) else str(ba_zi_data) if ba_zi_data else None
+        
+        # 如果没有baZi数据，尝试根据出生日期和时间计算
+        if not ba_zi_str and data.get('birthDate'):
+            try:
+                # 构建完整的出生日期时间字符串
+                birth_date = data.get('birthDate')
+                birth_time = data.get('birthTime', '12:00:00')
+                birth_time_str = f"{birth_date} {birth_time}"
+                
+                # 解析出生时间
+                if ' ' in birth_time_str:
+                    birth_time_obj = datetime.strptime(birth_time_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    birth_time_obj = datetime.strptime(birth_time_str, '%Y-%m-%d')
+                
+                # 计算生辰八字
+                ba_zi_str = calculate_bazi(birth_time_obj, 120.0)
+                print(f'自动计算生辰八字: {ba_zi_str}')
+            except Exception as e:
+                print(f'自动计算生辰八字失败: {str(e)}')
         
         # 计算农历生日
         lunar_birth_date = None
@@ -277,49 +303,44 @@ def update_member(member_id):
             except Exception:
                 pass
         
-        # 更新成员数据
-        cursor.execute('''
-            UPDATE members
-            SET name = ?, gender = ?, birth_date = ?, birth_time = ?, ba_zi = ?, lunar_birth_date = ?, death_date = ?, photo = ?, bio = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (
-            data.get('name'),
-            data.get('gender'),
-            data.get('birthDate'),
-            data.get('birthTime'),
-            ba_zi_str,
-            lunar_birth_date,
-            data.get('deathDate'),
-            data.get('photo'),
-            data.get('bio'),
-            member_id
-        ))
+        # 更新成员数据到Supabase
+        member_data = {
+            'name': data.get('name'),
+            'gender': data.get('gender'),
+            'birth_date': data.get('birthDate'),
+            'birth_time': data.get('birthTime'),
+            'ba_zi': ba_zi_str,
+            'lunar_birth_date': lunar_birth_date,
+            'death_date': data.get('deathDate'),
+            'photo': data.get('photo'),
+            'bio': data.get('bio'),
+            'father_id': data.get('fatherId'),
+            'mother_id': data.get('motherId')
+        }
         
-        # 删除旧关系
-        cursor.execute('DELETE FROM relations WHERE member_id = ?', (member_id,))
+        # 更新成员
+        supabase.table('members').update(member_data).eq('id', member_id).execute()
         
-        # 处理新关系数据
-        if 'fatherId' in data and data['fatherId']:
-            cursor.execute('''
-                INSERT INTO relations (member_id, relation_type, related_member_id)
-                VALUES (?, ?, ?)
-            ''', (member_id, 'father', data['fatherId']))
+        # 删除旧配偶关系
+        supabase.table('spouses').delete().eq('member_id', member_id).execute()
         
-        if 'motherId' in data and data['motherId']:
-            cursor.execute('''
-                INSERT INTO relations (member_id, relation_type, related_member_id)
-                VALUES (?, ?, ?)
-            ''', (member_id, 'mother', data['motherId']))
-        
+        # 处理新配偶关系
         if 'spouseIds' in data and data['spouseIds']:
             for spouse_id in data['spouseIds']:
-                cursor.execute('''
-                    INSERT INTO relations (member_id, relation_type, related_member_id)
-                    VALUES (?, ?, ?)
-                ''', (member_id, 'spouse', spouse_id))
-        
-        conn.commit()
-        conn.close()
+                # 插入配偶关系
+                supabase.table('spouses').insert({
+                    'member_id': member_id,
+                    'spouse_id': spouse_id
+                }).execute()
+                
+                # 确保反向配偶关系存在
+                # 先删除旧的反向关系
+                supabase.table('spouses').delete().eq('member_id', spouse_id).eq('spouse_id', member_id).execute()
+                # 插入新的反向配偶关系
+                supabase.table('spouses').insert({
+                    'member_id': spouse_id,
+                    'spouse_id': member_id
+                }).execute()
         
         return jsonify({'message': '成员更新成功'})
     except Exception as e:
@@ -328,17 +349,20 @@ def update_member(member_id):
 @app.route('/api/members/<member_id>', methods=['DELETE'])
 def delete_member(member_id):
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # 删除相关的配偶关系
+        # 删除以该成员为member_id的配偶关系
+        supabase.table('spouses').delete().eq('member_id', member_id).execute()
+        # 删除以该成员为spouse_id的配偶关系
+        supabase.table('spouses').delete().eq('spouse_id', member_id).execute()
         
-        # 删除相关关系
-        cursor.execute('DELETE FROM relations WHERE member_id = ? OR related_member_id = ?', (member_id, member_id))
+        # 删除相关的子女关系
+        # 删除以该成员为parent_id的子女关系
+        supabase.table('children').delete().eq('parent_id', member_id).execute()
+        # 删除以该成员为child_id的子女关系
+        supabase.table('children').delete().eq('child_id', member_id).execute()
         
         # 删除成员
-        cursor.execute('DELETE FROM members WHERE id = ?', (member_id,))
-        
-        conn.commit()
-        conn.close()
+        supabase.table('members').delete().eq('id', member_id).execute()
         
         return jsonify({'message': '成员删除成功'})
     except Exception as e:

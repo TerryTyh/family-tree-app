@@ -8,7 +8,7 @@
             "type": "msedge",
             "request": "launch",
             "name": "Open index.html",
-            "file": "/Users/tianyuehua/应用/family-tree-app/web/index.html"
+            "file": "/Users/tianyuehua/应用/family-tree-app/index.html"
         }
     ]
 }

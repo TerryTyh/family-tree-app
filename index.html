@@ -588,20 +588,44 @@
     }
     
     // 初始化应用
-    document.addEventListener('DOMContentLoaded', function() {
-      initCanvas();
-      setupEventListeners();
-      
-      // 初始化照片编辑器
-      initPhotoEditor();
-      
-      // 加载数据并在完成后更新UI
-      loadFamilyData().then(() => {
+    document.addEventListener('DOMContentLoaded', async function() {
+      console.log('=== 页面初始化开始 ===');
+      try {
+        // 显示初始化loading
+        console.log('显示初始化loading');
+        showLoading('初始化中...');
+        
+        console.log('初始化Canvas');
+        initCanvas();
+        console.log('设置事件监听器');
+        setupEventListeners();
+        
+        // 初始化照片编辑器
+        console.log('初始化照片编辑器');
+        initPhotoEditor();
+        
+        // 加载数据并在完成后更新UI
+        console.log('开始加载家族数据');
+        await loadFamilyData();
+        console.log('家族数据加载完成');
+        console.log('更新成员列表');
         updateMembersList();
+        console.log('更新关系选择器');
         updateRelationsSelects();
-      });
+        // 隐藏loading
+        console.log('隐藏loading');
+        hideLoading();
+        console.log('=== 页面初始化完成 ===');
+      } catch (error) {
+        console.error('初始化失败:', error);
+        // 即使加载失败也隐藏loading
+        console.log('隐藏loading（初始化失败）');
+        hideLoading();
+        console.log('=== 页面初始化完成（失败） ===');
+      }
       
       // 测试数据库功能
+      console.log('测试数据库功能');
       testDatabase();
     });
     
@@ -727,12 +751,19 @@
         document.getElementById('importExportModal').classList.add('hidden');
       });
       
-      document.getElementById('confirmImportExportBtn').addEventListener('click', function() {
+      document.getElementById('confirmImportExportBtn').addEventListener('click', async function() {
+        console.log('=== 点击确认按钮 ===');
+        console.log('当前模式:', importExportMode);
         if (importExportMode === 'import') {
-          importFamilyData();
+          console.log('开始导入数据');
+          await importFamilyData();
+          console.log('导入数据完成');
         } else {
+          console.log('开始导出数据');
           exportFamilyData();
+          console.log('导出数据完成');
         }
+        console.log('关闭导入导出弹窗');
         document.getElementById('importExportModal').classList.add('hidden');
       });
       
@@ -1559,6 +1590,9 @@
       }
       
       try {
+        // 显示loading UI
+        showLoading('保存中...');
+        
         let response;
         if (currentEditMode === 'add') {
           // 添加新成员
@@ -1608,6 +1642,9 @@
       } catch (error) {
         console.error('保存成员失败:', error);
         alert('保存失败: ' + error.message);
+      } finally {
+        // 隐藏loading UI
+        hideLoading();
       }
     }
     
@@ -1616,11 +1653,25 @@
       const memberId = document.getElementById('memberId').value;
       if (!memberId) return;
       
+      // 检查是否有其他成员引用该成员作为父母
+      const referencedBy = familyData.members.filter(member => 
+        member.fatherId === memberId || member.motherId === memberId
+      );
+      
+      if (referencedBy.length > 0) {
+        const names = referencedBy.map(m => m.name).join('、');
+        alert(`无法删除该成员，因为以下成员将其作为父母: ${names}`);
+        return;
+      }
+      
       if (!confirm('确定要删除这个成员吗？相关的关系也会被删除。')) {
         return;
       }
       
       try {
+        // 显示loading UI
+        showLoading('删除中...');
+        
         // 通过API删除成员
         const response = await fetch(`http://localhost:5001/api/members/${memberId}`, {
           method: 'DELETE',
@@ -1658,6 +1709,9 @@
       } catch (error) {
         console.error('删除成员失败:', error);
         alert('删除失败: ' + error.message);
+      } finally {
+        // 隐藏loading UI
+        hideLoading();
       }
     }
     
@@ -2883,7 +2937,32 @@
     
     // 生成唯一ID
     function generateId() {
-      return 'member_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      // 生成UUID v4格式的ID
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    
+    // 显示loading UI
+    function showLoading(text = '加载中...') {
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      const loadingText = document.getElementById('loadingText');
+      if (loadingText) {
+        loadingText.textContent = text;
+      }
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+      }
+    }
+    
+    // 隐藏loading UI
+    function hideLoading() {
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+      }
     }
     
     // 显示消息
@@ -2940,8 +3019,10 @@
     function loadFamilyData() {
       return new Promise((resolve, reject) => {
         // 从API获取数据
+        console.log('发送API请求到 http://localhost:5001/api/members');
         fetch('http://localhost:5001/api/members')
           .then(response => {
+            console.log('API响应状态:', response.status);
             if (!response.ok) {
               throw new Error(`API调用失败: ${response.status}`);
             }
@@ -2953,9 +3034,11 @@
             // 处理数据格式
             familyData = {
               members: data.members || [],
-              rootMemberId: data.members.length > 0 ? data.members[0].id : null,
+              rootMemberId: data.members && data.members.length > 0 ? data.members[0].id : null,
               lastUpdated: new Date().toISOString()
             };
+            
+            console.log('处理后的家族数据:', familyData);
             
             // 如果有数据，隐藏初始提示并渲染家族树
             if (familyData.members.length > 0) {
@@ -2978,178 +3061,262 @@
     }
     
     // 导入家族数据
-    function importFamilyData() {
+    async function importFamilyData() {
+      console.log('=== 开始导入家族数据 ===');
+      
       const fileInput = document.getElementById('importFile');
+      console.log('文件输入元素:', fileInput);
+      console.log('选择的文件:', fileInput.files);
+      
       const file = fileInput.files[0];
+      console.log('获取到的文件:', file);
       
       if (!file) {
+        console.log('未选择文件');
         alert('请选择一个文件');
         return;
       }
       
-      const reader = new FileReader();
+      console.log('文件名称:', file.name);
+      console.log('文件大小:', file.size);
+      console.log('文件类型:', file.type);
       
-      reader.onload = async function(e) {
-        try {
-          // 读取Excel文件
-          const workbook = XLSX.read(e.target.result, { type: 'binary' });
+      try {
+        // 显示loading UI
+        showLoading('导入中...');
+        console.log('显示loading UI');
+        
+        // 读取文件
+        const fileContent = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          console.log('创建FileReader实例');
           
-          // 获取第一个工作表
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          
-          // 将工作表转换为JSON
-          const membersData = XLSX.utils.sheet_to_json(worksheet);
-          
-          // 处理数据格式，将逗号分隔的字符串转换回数组
-          const processedMembers = membersData.map(member => {
-            // 处理中文标题的字段映射
-            const processedMember = {
-              id: generateId(), // 自动生成ID
-              name: member.name || member['姓名'],
-              gender: member.gender || (member['性别'] === '男' ? 'male' : member['性别'] === '女' ? 'female' : ''),
-              birthDate: member.birthDate || member['出生日期'],
-              birthTime: member.birthTime || member['出生时间'],
-              deathDate: member.deathDate || member['去世日期'],
-              bio: member.bio || member['生平简介'],
-              fatherName: member.father || member['父亲'],
-              motherName: member.mother || member['母亲'],
-              spouseNames: member.spouse || member['配偶'],
-              fatherId: null,
-              motherId: null,
-              spouseIds: [],
-              childrenIds: []
-            };
-            
-            return processedMember;
-          });
-          
-          // 建立姓名到ID的映射，包含系统中已存在的成员
-          const nameToIdMap = {};
-          
-          // 先添加系统中已存在的成员
-          familyData.members.forEach(existingMember => {
-            nameToIdMap[existingMember.name.trim()] = existingMember.id;
-          });
-          
-          // 再添加新导入的成员
-          processedMembers.forEach(member => {
-            nameToIdMap[member.name.trim()] = member.id;
-          });
-          
-          // 记录导入结果
-          const importResults = {
-            success: 0,
-            failed: 0,
-            errors: []
+          reader.onload = function(e) {
+            console.log('文件读取完成');
+            resolve(e.target.result);
           };
           
-          // 根据姓名关联家族关系
-          processedMembers.forEach(member => {
-            let memberErrors = [];
+          reader.onerror = function(error) {
+            console.error('文件读取失败:', error);
+            reject(error);
+          };
+          
+          console.log('开始读取文件');
+          reader.readAsBinaryString(file);
+        });
+        
+        // 读取Excel文件
+        console.log('开始读取Excel文件');
+        const workbook = XLSX.read(fileContent, { type: 'binary' });
+        console.log('Excel文件读取成功，工作表数量:', workbook.SheetNames.length);
+        console.log('工作表名称:', workbook.SheetNames);
+        
+        // 获取第一个工作表
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        console.log('获取第一个工作表:', workbook.SheetNames[0]);
+        
+        // 将工作表转换为JSON
+        const membersData = XLSX.utils.sheet_to_json(worksheet);
+        console.log('工作表转换为JSON，数据量:', membersData.length);
+        console.log('数据示例:', membersData[0]);
+        
+        // 处理数据格式，将逗号分隔的字符串转换回数组
+        const processedMembers = membersData.map(member => {
+          // 处理中文标题的字段映射
+          const processedMember = {
+            id: generateId(), // 自动生成ID
+            name: member.name || member['姓名'],
+            gender: member.gender || (member['性别'] === '男' ? 'male' : member['性别'] === '女' ? 'female' : ''),
+            birthDate: member.birthDate || member['出生日期'],
+            birthTime: member.birthTime || member['出生时间'],
+            deathDate: member.deathDate || member['去世日期'],
+            bio: member.bio || member['生平简介'],
+            fatherName: member.father || member['父亲'],
+            motherName: member.mother || member['母亲'],
+            spouseNames: member.spouse || member['配偶'],
+            fatherId: null,
+            motherId: null,
+            spouseIds: [],
+            childrenIds: []
+          };
+          
+          return processedMember;
+        });
+        console.log('数据处理完成，处理后的数据量:', processedMembers.length);
+        console.log('处理后的数据示例:', processedMembers[0]);
+        
+        // 记录导入结果
+        const importResults = {
+          success: 0,
+          failed: 0,
+          errors: []
+        };
+        
+        // 保存每个成员及其关系
+        console.log('开始保存数据');
+        
+        // 保存每个成员
+        for (const member of processedMembers) {
+          console.log('保存成员:', member.name);
+          
+          // 检查成员是否已存在（通过姓名）
+          const existingMember = familyData.members.find(m => m.name === member.name);
+          if (existingMember) {
+            // 成员已存在，使用编辑模式
+            currentEditMode = 'edit';
+            document.getElementById('memberId').value = existingMember.id;
+            console.log('成员已存在，使用编辑模式:', member.name);
+          } else {
+            // 新成员，使用添加模式
+            currentEditMode = 'add';
+            document.getElementById('memberId').value = member.id;
+            console.log('新成员，使用添加模式:', member.name);
+          }
+          
+          // 模拟表单数据
+          document.getElementById('memberName').value = member.name;
+          document.querySelector(`input[name="gender"][value="${member.gender}"]`).checked = true;
+          document.getElementById('birthDate').value = member.birthDate || '';
+          document.getElementById('birthTime').value = member.birthTime || '';
+          document.getElementById('deathDate').value = member.deathDate || '';
+          document.getElementById('bio').value = member.bio || '';
+          
+          // 暂时不设置关系，先保存基本信息
+          document.getElementById('fatherId').value = '';
+          document.getElementById('motherId').value = '';
+          document.getElementById('spouseId').value = '';
+          
+          // 保存成员
+          await saveMember();
+          
+          // 记录结果
+          importResults.success++;
+        }
+        
+        // 重新加载数据以获取实际的ID
+        await loadFamilyData();
+        console.log('重新加载数据完成，成员数量:', familyData.members.length);
+        
+        // 建立姓名到ID的映射
+        const memberNameToIdMap = {};
+        familyData.members.forEach(member => {
+          memberNameToIdMap[member.name.trim()] = member.id;
+        });
+        console.log('建立姓名到ID映射，映射数量:', Object.keys(memberNameToIdMap).length);
+        
+        // 更新每个成员的关系
+        console.log('开始更新成员关系');
+        for (const member of processedMembers) {
+          console.log('更新成员关系:', member.name);
+          
+          // 查找对应的实际成员
+          const actualMember = familyData.members.find(m => m.name === member.name);
+          if (actualMember) {
+            // 使用编辑模式
+            currentEditMode = 'edit';
+            document.getElementById('memberId').value = actualMember.id;
             
-            // 关联父亲
+            // 模拟表单数据
+            document.getElementById('memberName').value = member.name;
+            document.querySelector(`input[name="gender"][value="${member.gender}"]`).checked = true;
+            document.getElementById('birthDate').value = member.birthDate || '';
+            document.getElementById('birthTime').value = member.birthTime || '';
+            document.getElementById('deathDate').value = member.deathDate || '';
+            document.getElementById('bio').value = member.bio || '';
+            
+            // 设置父亲ID
+            let fatherId = '';
             if (member.fatherName) {
               const fatherName = member.fatherName.trim();
-              if (nameToIdMap[fatherName]) {
-                member.fatherId = nameToIdMap[fatherName];
-              } else if (fatherName) {
-                memberErrors.push(`父亲 "${fatherName}" 未找到`);
+              if (memberNameToIdMap[fatherName]) {
+                fatherId = memberNameToIdMap[fatherName];
+              } else {
+                importResults.errors.push({
+                  name: member.name,
+                  errors: [`父亲 "${fatherName}" 未找到`]
+                });
               }
             }
+            document.getElementById('fatherId').value = fatherId;
             
-            // 关联母亲
+            // 设置母亲ID
+            let motherId = '';
             if (member.motherName) {
               const motherName = member.motherName.trim();
-              if (nameToIdMap[motherName]) {
-                member.motherId = nameToIdMap[motherName];
-              } else if (motherName) {
-                memberErrors.push(`母亲 "${motherName}" 未找到`);
+              if (memberNameToIdMap[motherName]) {
+                motherId = memberNameToIdMap[motherName];
+              } else {
+                importResults.errors.push({
+                  name: member.name,
+                  errors: [`母亲 "${motherName}" 未找到`]
+                });
               }
             }
+            document.getElementById('motherId').value = motherId;
             
-            // 关联配偶
+            // 设置配偶ID
+            let spouseId = '';
             if (member.spouseNames) {
               const spouseNames = member.spouseNames.split(',').map(name => name.trim()).filter(name => name !== '');
-              spouseNames.forEach(spouseName => {
-                if (nameToIdMap[spouseName]) {
-                  member.spouseIds.push(nameToIdMap[spouseName]);
+              if (spouseNames.length > 0) {
+                const spouseName = spouseNames[0];
+                if (memberNameToIdMap[spouseName]) {
+                  spouseId = memberNameToIdMap[spouseName];
                 } else {
-                  memberErrors.push(`配偶 "${spouseName}" 未找到`);
+                  importResults.errors.push({
+                    name: member.name,
+                    errors: [`配偶 "${spouseName}" 未找到`]
+                  });
                 }
-              });
-            }
-            
-            // 清理临时字段
-            delete member.fatherName;
-            delete member.motherName;
-            delete member.spouseNames;
-            
-            // 记录结果
-            importResults.success++;
-            if (memberErrors.length > 0) {
-              importResults.errors.push({
-                name: member.name,
-                errors: memberErrors
-              });
-            }
-          });
-          
-          // 构建家族数据
-          const importedData = {
-            members: processedMembers,
-            rootMemberId: processedMembers.length > 0 ? processedMembers[0].id : null,
-            lastUpdated: new Date().toISOString()
-          };
-          
-          // 验证数据格式
-          if (!importedData.members || !Array.isArray(importedData.members)) {
-            throw new Error('无效的数据格式');
-          }
-          
-          // 更新数据
-          familyData = importedData;
-          familyData.lastUpdated = new Date().toISOString();
-          
-          // 为每个成员计算生辰八字
-          for (const member of familyData.members) {
-            if (member.birthDate) {
-              const baZi = await calculateBaZi(member.birthDate, member.birthTime);
-              if (baZi) {
-                member.baZi = baZi;
               }
             }
+            document.getElementById('spouseId').value = spouseId;
+            
+            // 保存成员更新
+            await saveMember();
           }
-          
-          // 保存数据
-          saveFamilyData();
-          updateMembersList();
-          updateRelationsSelects();
-          
-          // 渲染家族树
-          if (familyData.members.length > 0) {
-            document.getElementById('initialPrompt').classList.add('hidden');
-            renderFamilyTree();
-          }
-          
-          // 显示导入结果
-          let resultMessage = `导入完成！\n成功: ${importResults.success} 条`;
-          
-          if (importResults.errors.length > 0) {
-            resultMessage += '\n\n注意事项:';
-            importResults.errors.forEach(error => {
-              resultMessage += `\n- ${error.name}: ${error.errors.join(', ')}`;
-            });
-          }
-          
-          alert(resultMessage);
-        } catch (error) {
-          console.error('导入失败:', error);
-          document.getElementById('importError').textContent = '导入失败: ' + error.message;
-          document.getElementById('importError').classList.remove('hidden');
         }
-      };
-      
-      reader.readAsBinaryString(file);
+        console.log('成员关系更新完成');
+        
+        // 重新加载数据以确保所有关系正确
+        await loadFamilyData();
+        console.log('最终数据加载完成');
+        console.log('最终成员数量:', familyData.members.length);
+        
+        updateMembersList();
+        console.log('更新成员列表完成');
+        
+        updateRelationsSelects();
+        console.log('更新关系选择器完成');
+        
+        // 渲染家族树
+        if (familyData.members.length > 0) {
+          document.getElementById('initialPrompt').classList.add('hidden');
+          renderFamilyTree();
+          console.log('渲染家族树完成');
+        }
+        
+        // 显示导入结果
+        let resultMessage = `导入完成！\n成功: ${importResults.success} 条`;
+        
+        if (importResults.errors.length > 0) {
+          resultMessage += '\n\n注意事项:';
+          importResults.errors.forEach(error => {
+            resultMessage += `\n- ${error.name}: ${error.errors.join(', ')}`;
+          });
+        }
+        
+        console.log('导入结果:', resultMessage);
+        alert(resultMessage);
+      } catch (error) {
+        console.error('导入失败:', error);
+        document.getElementById('importError').textContent = '导入失败: ' + error.message;
+        document.getElementById('importError').classList.remove('hidden');
+      } finally {
+        // 隐藏loading UI
+        hideLoading();
+        console.log('隐藏loading UI');
+      }
     }
     
     // 导出家族数据
@@ -3240,8 +3407,16 @@
         </div>
         <button id="applyCropBtn" class="px-3 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-accent focus:outline-none">
           应用
-        </button>
+        </button></div>
       </div>
+    </div>
+  </div>
+  
+  <!-- Loading UI -->
+  <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 flex flex-col items-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+      <p id="loadingText" class="text-lg font-medium">加载中...</p>
     </div>
   </div>
 
