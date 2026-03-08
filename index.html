@@ -3025,10 +3025,14 @@
     function loadFamilyData() {
       return new Promise((resolve, reject) => {
         // 从API获取数据
-        console.log('发送API请求到 ' + config.apiBaseUrl + '/api/members');
-        fetch(`${config.apiBaseUrl}/api/members`)
+        const apiUrl = `${config.apiBaseUrl}/api/members`;
+        console.log('发送API请求到:', apiUrl);
+        
+        fetch(apiUrl)
           .then(response => {
             console.log('API响应状态:', response.status);
+            console.log('API响应头部:', response.headers);
+            
             if (!response.ok) {
               throw new Error(`API调用失败: ${response.status}`);
             }
@@ -3050,11 +3054,14 @@
             if (familyData.members.length > 0) {
               document.getElementById('initialPrompt').classList.add('hidden');
               renderFamilyTree();
+            } else {
+              console.log('没有获取到成员数据');
             }
             resolve(familyData);
           })
           .catch(error => {
             console.error('从API加载数据失败:', error);
+            console.error('错误详情:', error.message);
             // 失败时使用默认数据
             familyData = {
               members: [],
