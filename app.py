@@ -20,7 +20,7 @@ from lunar_python import Solar
 from supabase import create_client, Client
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000'], supports_credentials=True)
 
 # Supabase配置
 import os
