@@ -7,6 +7,10 @@ import os
 import json
 import bcrypt
 import jwt
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from functools import wraps
 
 # 加载环境变量
@@ -21,9 +25,17 @@ from lunar_python import Solar
 
 # 导入Supabase客户端
 from supabase import create_client, Client
+import ssl
+import urllib3
+import os
+
+# 配置urllib3使用更宽松的SSL设置
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
 
 app = Flask(__name__)
-CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000'], supports_credentials=True)
+CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000', 'http://localhost:8080', 'http://127.0.0.1:8080'], supports_credentials=True)
 
 # Supabase配置
 import os
@@ -33,11 +45,61 @@ SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError('Supabase配置缺失，请设置环境变量SUPABASE_URL和SUPABASE_KEY')
 
+# 初始化Supabase客户端
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # JWT配置
 JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key-here')
 JWT_EXPIRATION_DAYS = 7
+
+# 邮件配置
+EMAIL_SMTP_SERVER = os.environ.get('EMAIL_SMTP_SERVER', 'smtp.163.com')
+EMAIL_SMTP_PORT = int(os.environ.get('EMAIL_SMTP_PORT', '465'))
+EMAIL_USERNAME = os.environ.get('EMAIL_USERNAME', 'your-email@163.com')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your-email-password')
+EMAIL_SENDER = os.environ.get('EMAIL_SENDER', 'your-email@163.com')
+
+# 验证码存储（实际项目中应该使用Redis）
+verification_codes = {}
+
+# 生成验证码
+def generate_verification_code():
+    return str(random.randint(100000, 999999))
+
+# 发送验证码邮件
+def send_verification_email(email, code):
+    try:
+        # 创建邮件
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = email
+        msg['Subject'] = '族谱管理系统 - 邮箱验证码'
+        
+        # 邮件内容
+        body = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #333; text-align: center;">族谱管理系统</h2>
+            <p style="color: #666; line-height: 1.6;">尊敬的用户：</p>
+            <p style="color: #666; line-height: 1.6;">您正在进行邮箱验证，以下是您的验证码：</p>
+            <div style="background-color: #f5f5f5; padding: 20px; text-align: center; border-radius: 4px; margin: 20px 0;">
+                <span style="font-size: 32px; font-weight: bold; color: #333;">{code}</span>
+            </div>
+            <p style="color: #666; line-height: 1.6;">验证码将在5分钟后失效，请及时使用。</p>
+            <p style="color: #666; line-height: 1.6;">如果您没有请求此验证码，请忽略此邮件。</p>
+            <p style="color: #666; line-height: 1.6; margin-top: 30px;">此致，</p>
+            <p style="color: #666; line-height: 1.6;">族谱管理系统团队</p>
+        </div>
+        """
+        msg.attach(MIMEText(body, 'html'))
+        
+        # 发送邮件
+        with smtplib.SMTP_SSL(EMAIL_SMTP_SERVER, EMAIL_SMTP_PORT) as server:
+            server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"发送邮件失败: {str(e)}")
+        return False
 
 # 初始化数据库
 def init_db():
@@ -97,6 +159,34 @@ def login_required(f):
 
 # ==================== 用户认证API ====================
 
+@app.route('/api/auth/send-verification-code', methods=['POST'])
+def send_verification_code():
+    """发送邮箱验证码"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': '请求数据不能为空'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        if not email:
+            return jsonify({'error': '请输入邮箱'}), 400
+        
+        # 生成验证码
+        code = generate_verification_code()
+        
+        # 发送邮件
+        if send_verification_email(email, code):
+            # 存储验证码（5分钟有效期）
+            verification_codes[email] = {
+                'code': code,
+                'expire_at': datetime.utcnow() + timedelta(minutes=5)
+            }
+            return jsonify({'message': '验证码已发送到您的邮箱，请查收'})
+        else:
+            return jsonify({'error': '发送验证码失败，请稍后重试'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     """用户注册"""
@@ -108,6 +198,7 @@ def register():
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
         username = data.get('username', '').strip()
+        verification_code = data.get('verification_code', '')
         
         # 验证必填字段
         if not email:
@@ -116,6 +207,23 @@ def register():
             return jsonify({'error': '请输入密码'}), 400
         if len(password) < 6:
             return jsonify({'error': '密码长度至少6位'}), 400
+        if not verification_code:
+            return jsonify({'error': '请输入验证码'}), 400
+        
+        # 验证验证码
+        if email not in verification_codes:
+            return jsonify({'error': '验证码已过期或无效'}), 400
+        
+        code_data = verification_codes[email]
+        if code_data['expire_at'] < datetime.utcnow():
+            del verification_codes[email]
+            return jsonify({'error': '验证码已过期'}), 400
+        
+        if code_data['code'] != verification_code:
+            return jsonify({'error': '验证码错误'}), 400
+        
+        # 验证通过，删除验证码
+        del verification_codes[email]
         
         # 检查邮箱是否已存在
         existing_user = supabase.table('users').select('*').eq('email', email).execute()

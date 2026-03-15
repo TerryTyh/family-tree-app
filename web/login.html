@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 家族图谱</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#8B4513',
+            secondary: '#D2B48C',
+            accent: '#A0522D',
+            light: '#F5F5DC',
+            dark: '#3E2723'
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      background: linear-gradient(135deg, #F5F5DC 0%, #D2B48C 100%);
+      min-height: 100vh;
+    }
+    .auth-card {
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.95);
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <!-- Logo和标题 -->
+    <div class="text-center mb-8">
+      <a href="../index.html" class="inline-flex items-center space-x-3 mb-4">
+        <i class="fa fa-sitemap text-4xl text-primary"></i>
+        <span class="text-2xl font-bold text-dark">家族图谱</span>
+      </a>
+      <p class="text-gray-600">记录家族历史，传承家族文化</p>
+    </div>
+    
+    <!-- 登录/注册卡片 -->
+    <div class="auth-card rounded-2xl shadow-2xl p-8">
+      <!-- 标签切换 -->
+      <div class="flex mb-6 border-b border-gray-200">
+        <button id="loginTab" class="flex-1 pb-3 text-center font-medium text-primary border-b-2 border-primary transition-colors">
+          登录
+        </button>
+        <button id="registerTab" class="flex-1 pb-3 text-center font-medium text-gray-500 hover:text-primary transition-colors">
+          注册
+        </button>
+      </div>
+      
+      <!-- 登录表单 -->
+      <form id="loginForm" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+          <div class="relative">
+            <i class="fa fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="email" id="loginEmail" required 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="请输入邮箱">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+          <div class="relative">
+            <i class="fa fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="password" id="loginPassword" required 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="请输入密码">
+          </div>
+        </div>
+        
+        <div class="flex items-center justify-between text-sm">
+          <label class="flex items-center">
+            <input type="checkbox" id="rememberMe" class="mr-2 rounded text-primary focus:ring-primary">
+            <span class="text-gray-600">记住我</span>
+          </label>
+          <a href="#" class="text-primary hover:text-accent">忘记密码？</a>
+        </div>
+        
+        <button type="submit" id="loginSubmitBtn"
+          class="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-accent focus:ring-4 focus:ring-primary/30 transition-all">
+          登录
+        </button>
+      </form>
+      
+      <!-- 注册表单 -->
+      <form id="registerForm" class="space-y-5 hidden">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+          <div class="relative">
+            <i class="fa fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="email" id="registerEmail" required 
+              class="w-full pl-10 pr-36 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="请输入邮箱">
+            <button type="button" id="sendCodeBtn" 
+              class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-sm bg-primary text-white rounded-md hover:bg-accent transition-colors">
+              发送验证码
+            </button>
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">验证码</label>
+          <div class="relative">
+            <i class="fa fa-shield absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="verificationCode" required 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="请输入邮箱验证码">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">用户名（可选）</label>
+          <div class="relative">
+            <i class="fa fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="text" id="registerUsername" 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="设置一个用户名">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+          <div class="relative">
+            <i class="fa fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="password" id="registerPassword" required 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="设置密码（至少6位）">
+          </div>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">确认密码</label>
+          <div class="relative">
+            <i class="fa fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="password" id="registerConfirmPassword" required 
+              class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+              placeholder="再次输入密码">
+          </div>
+        </div>
+        
+        <button type="submit" id="registerSubmitBtn"
+          class="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-accent focus:ring-4 focus:ring-primary/30 transition-all">
+          注册
+        </button>
+      </form>
+      
+      <!-- 错误提示 -->
+      <div id="errorMessage" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm hidden"></div>
+      
+      <!-- 返回首页 -->
+      <div class="mt-6 text-center">
+        <a href="../index.html" class="text-gray-500 hover:text-primary text-sm">
+          <i class="fa fa-arrow-left mr-1"></i> 返回首页
+        </a>
+      </div>
+    </div>
+    
+    <!-- 页脚 -->
+    <p class="text-center text-gray-500 text-sm mt-8">
+      © 2024 家族图谱 - 记录家族历史与传承
+    </p>
+  </div>
+  
+  <script>
+    const config = {
+      apiBaseUrl: 'https://family-tree-app-lake.vercel.app'
+    };
+    
+    // 检查是否已登录
+    if (localStorage.getItem('authToken')) {
+      window.location.href = 'app.html';
+    }
+    
+    // 标签切换
+    const loginTab = document.getElementById('loginTab');
+    const registerTab = document.getElementById('registerTab');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    
+    loginTab.addEventListener('click', () => {
+      loginTab.classList.add('text-primary', 'border-b-2', 'border-primary');
+      loginTab.classList.remove('text-gray-500');
+      registerTab.classList.remove('text-primary', 'border-b-2', 'border-primary');
+      registerTab.classList.add('text-gray-500');
+      loginForm.classList.remove('hidden');
+      registerForm.classList.add('hidden');
+      hideError();
+    });
+    
+    registerTab.addEventListener('click', () => {
+      registerTab.classList.add('text-primary', 'border-b-2', 'border-primary');
+      registerTab.classList.remove('text-gray-500');
+      loginTab.classList.remove('text-primary', 'border-b-2', 'border-primary');
+      loginTab.classList.add('text-gray-500');
+      registerForm.classList.remove('hidden');
+      loginForm.classList.add('hidden');
+      hideError();
+    });
+    
+    // 显示/隐藏错误
+    function showError(message) {
+      const errorDiv = document.getElementById('errorMessage');
+      errorDiv.textContent = message;
+      errorDiv.classList.remove('hidden');
+    }
+    
+    function hideError() {
+      document.getElementById('errorMessage').classList.add('hidden');
+    }
+    
+    // 设置按钮loading状态
+    function setButtonLoading(button, loading) {
+      if (loading) {
+        button.disabled = true;
+        button.dataset.originalText = button.textContent;
+        button.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>处理中...';
+      } else {
+        button.disabled = false;
+        button.textContent = button.dataset.originalText;
+      }
+    }
+    
+    // 登录
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const rememberMe = document.getElementById('rememberMe').checked;
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      
+      setButtonLoading(submitBtn, true);
+      
+      try {
+        const response = await fetch(`${config.apiBaseUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          localStorage.setItem('authToken', data.token);
+          if (rememberMe) {
+            localStorage.setItem('rememberEmail', email);
+          } else {
+            localStorage.removeItem('rememberEmail');
+          }
+          window.location.href = 'app.html';
+        } else {
+          showError(data.error || '登录失败，请检查邮箱和密码');
+        }
+      } catch (error) {
+        showError('网络错误，请稍后重试');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+    
+    // 发送验证码
+    const sendCodeBtn = document.getElementById('sendCodeBtn');
+    let countdown = 60;
+    let countdownTimer = null;
+    
+    sendCodeBtn.addEventListener('click', async () => {
+      const email = document.getElementById('registerEmail').value.trim();
+      
+      if (!email) {
+        showError('请输入邮箱');
+        return;
+      }
+      
+      // 验证邮箱格式
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        showError('请输入正确的邮箱格式');
+        return;
+      }
+      
+      // 开始倒计时
+      sendCodeBtn.disabled = true;
+      sendCodeBtn.textContent = `发送中...`;
+      
+      try {
+        const response = await fetch(`${config.apiBaseUrl}/api/auth/send-verification-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          // 开始60秒倒计时
+          countdown = 60;
+          sendCodeBtn.textContent = `${countdown}秒后重发`;
+          
+          if (countdownTimer) {
+            clearInterval(countdownTimer);
+          }
+          
+          countdownTimer = setInterval(() => {
+            countdown--;
+            sendCodeBtn.textContent = `${countdown}秒后重发`;
+            
+            if (countdown <= 0) {
+              clearInterval(countdownTimer);
+              sendCodeBtn.disabled = false;
+              sendCodeBtn.textContent = '发送验证码';
+            }
+          }, 1000);
+        } else {
+          showError(data.error || '发送验证码失败，请稍后重试');
+          sendCodeBtn.disabled = false;
+          sendCodeBtn.textContent = '发送验证码';
+        }
+      } catch (error) {
+        showError('网络错误，请稍后重试');
+        sendCodeBtn.disabled = false;
+        sendCodeBtn.textContent = '发送验证码';
+      }
+    });
+    
+    // 注册
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+      
+      const email = document.getElementById('registerEmail').value.trim();
+      const verificationCode = document.getElementById('verificationCode').value.trim();
+      const username = document.getElementById('registerUsername').value.trim();
+      const password = document.getElementById('registerPassword').value;
+      const confirmPassword = document.getElementById('registerConfirmPassword').value;
+      const submitBtn = document.getElementById('registerSubmitBtn');
+      
+      // 验证
+      if (!verificationCode) {
+        showError('请输入验证码');
+        return;
+      }
+      
+      if (password !== confirmPassword) {
+        showError('两次输入的密码不一致');
+        return;
+      }
+      
+      if (password.length < 6) {
+        showError('密码长度至少6位');
+        return;
+      }
+      
+      setButtonLoading(submitBtn, true);
+      
+      try {
+        const response = await fetch(`${config.apiBaseUrl}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, username, verification_code: verificationCode })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          localStorage.setItem('authToken', data.token);
+          window.location.href = 'app.html';
+        } else {
+          showError(data.error || '注册失败');
+        }
+      } catch (error) {
+        showError('网络错误，请稍后重试');
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
+    
+    // 自动填充记住的邮箱
+    const rememberedEmail = localStorage.getItem('rememberEmail');
+    if (rememberedEmail) {
+      document.getElementById('loginEmail').value = rememberedEmail;
+      document.getElementById('rememberMe').checked = true;
+    }
+  </script>
+</body>
+</html>
