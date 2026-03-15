@@ -57,7 +57,7 @@ EMAIL_SMTP_SERVER = os.environ.get('EMAIL_SMTP_SERVER', 'smtp.163.com')
 EMAIL_SMTP_PORT = int(os.environ.get('EMAIL_SMTP_PORT', '465'))
 EMAIL_USERNAME = os.environ.get('EMAIL_USERNAME', 'your-email@163.com')
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', 'your-email-password')
-EMAIL_SENDER = os.environ.get('EMAIL_SENDER', 'your-email@163.com')
+EMAIL_SENDER = os.environ.get('EMAIL_SENDER', EMAIL_USERNAME)  # 默认使用EMAIL_USERNAME
 
 # 验证码存储（实际项目中应该使用Redis）
 verification_codes = {}
