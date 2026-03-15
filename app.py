@@ -98,7 +98,11 @@ def send_verification_email(email, code):
             server.send_message(msg)
         return True
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"发送邮件失败: {str(e)}")
+        print(f"邮件配置: SERVER={EMAIL_SMTP_SERVER}, PORT={EMAIL_SMTP_PORT}, USERNAME={EMAIL_USERNAME}")
+        print(f"错误详情: {error_details}")
         return False
 
 # 初始化数据库
@@ -185,7 +189,11 @@ def send_verification_code():
         else:
             return jsonify({'error': '发送验证码失败，请稍后重试'}), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"发送验证码错误: {str(e)}")
+        print(f"错误详情: {error_details}")
+        return jsonify({'error': f'服务器错误: {str(e)}'}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
