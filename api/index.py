@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import os
+import sys
+
+# 将当前目录添加到Python路径
+sys.path.insert(0, os.path.dirname(__file__))
+
 from app import app
 
 # Vercel需要从环境变量中获取端口
