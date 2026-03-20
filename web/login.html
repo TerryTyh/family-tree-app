@@ -173,9 +173,25 @@
   </div>
   
   <script>
-    const config = {
-      apiBaseUrl: 'https://family-tree-app-lake.vercel.app'
+    // 全局配置 - 根据环境自动切换API地址
+    const getApiBaseUrl = () => {
+      const hostname = window.location.hostname;
+      
+      // 本地开发环境
+      if (hostname === '127.0.0.1' || hostname === 'localhost') {
+        return 'http://127.0.0.1:5001';
+      }
+      
+      // GitHub Pages或其他生产环境
+      return 'https://family-tree-app-lake.vercel.app';
     };
+    
+    const config = {
+      apiBaseUrl: getApiBaseUrl()
+    };
+    
+    console.log('当前环境:', window.location.hostname);
+    console.log('API地址:', config.apiBaseUrl);
     
     // 检查是否已登录
     if (localStorage.getItem('authToken')) {

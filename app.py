@@ -9,6 +9,9 @@ import bcrypt
 import jwt
 import random
 import smtplib
+import qrcode
+import io
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from functools import wraps
@@ -35,7 +38,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 app = Flask(__name__)
-CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000', 'http://localhost:8080', 'http://127.0.0.1:8080'], supports_credentials=True)
+CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000', 'http://127.0.0.1:8000', 'http://localhost:8080', 'http://127.0.0.1:8080'], supports_credentials=True)
 
 # Supabase配置
 import os
@@ -690,6 +693,205 @@ def delete_member(member_id):
 @app.route('/')
 def index():
     return "八字计算器API服务正在运行"
+
+# ==================== 分享功能API ====================
+
+# 生成唯一的分享码
+def generate_share_code():
+    """生成唯一的分享码"""
+    import string
+    characters = string.ascii_uppercase + string.digits
+    while True:
+        code = ''.join(random.choice(characters) for _ in range(10))
+        # 检查分享码是否已存在
+        result = supabase.table('family_shares').select('id').eq('share_code', code).execute()
+        if not result.data:
+            return code
+
+@app.route('/api/shares', methods=['POST'])
+@login_required
+def create_share():
+    """创建分享链接"""
+    try:
+        user_id = get_current_user()
+        
+        # 生成分享码
+        share_code = generate_share_code()
+        
+        # 创建分享记录
+        share_data = {
+            'user_id': user_id,
+            'share_code': share_code,
+            'is_active': True
+        }
+        
+        result = supabase.table('family_shares').insert(share_data).execute()
+        share = result.data[0]
+        
+        # 生成分享链接
+        # 根据环境自动切换域名
+        import os
+        host = os.environ.get('HOST', 'localhost')
+        if host == 'localhost' or '127.0.0.1' in host:
+            # 本地环境
+            share_url = f"http://127.0.0.1:8000/web/preview.html?code={share_code}"
+        else:
+            # 生产环境
+            share_url = f"https://terrytyh.github.io/family-tree-app/web/preview.html?code={share_code}"
+        
+        # 生成二维码
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(share_url)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        
+        # 将二维码转换为base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        img_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        qr_code = f"data:image/png;base64,{img_base64}"
+        
+        return jsonify({
+            'message': '分享链接创建成功',
+            'share_code': share_code,
+            'share_url': share_url,
+            'qr_code': qr_code,
+            'share_id': share['id']
+        })
+    except Exception as e:
+        print(f'创建分享链接失败: {str(e)}')
+        return jsonify({'error': '创建分享链接失败，请稍后重试'}), 500
+
+@app.route('/api/shares', methods=['GET'])
+@login_required
+def get_user_shares():
+    """获取用户的分享列表"""
+    try:
+        user_id = get_current_user()
+        
+        result = supabase.table('family_shares').select('*').eq('user_id', user_id).execute()
+        shares = result.data
+        
+        # 为每个分享生成链接
+        import os
+        host = os.environ.get('HOST', 'localhost')
+        if host == 'localhost' or '127.0.0.1' in host:
+            # 本地环境
+            base_url = "http://127.0.0.1:8000/web/preview.html"
+        else:
+            # 生产环境
+            base_url = "https://terrytyh.github.io/family-tree-app/web/preview.html"
+        
+        for share in shares:
+            share['share_url'] = f"{base_url}?code={share['share_code']}"
+        
+        return jsonify({
+            'shares': shares
+        })
+    except Exception as e:
+        print(f'获取分享列表失败: {str(e)}')
+        return jsonify({'error': '获取分享列表失败，请稍后重试'}), 500
+
+@app.route('/api/shares/<share_id>', methods=['PUT'])
+@login_required
+def update_share_status(share_id):
+    """更新分享状态（启用/禁用）"""
+    try:
+        user_id = get_current_user()
+        data = request.json
+        
+        if not data or 'is_active' not in data:
+            return jsonify({'error': '请求数据不能为空'}), 400
+        
+        # 验证分享是否属于当前用户
+        result = supabase.table('family_shares').select('id').eq('id', share_id).eq('user_id', user_id).execute()
+        if not result.data:
+            return jsonify({'error': '分享不存在或无权操作'}), 404
+        
+        # 更新状态
+        update_result = supabase.table('family_shares').update({'is_active': data['is_active']}).eq('id', share_id).execute()
+        
+        return jsonify({
+            'message': '分享状态更新成功',
+            'share': update_result.data[0]
+        })
+    except Exception as e:
+        print(f'更新分享状态失败: {str(e)}')
+        return jsonify({'error': '更新分享状态失败，请稍后重试'}), 500
+
+@app.route('/api/shares/<share_id>', methods=['DELETE'])
+@login_required
+def delete_share(share_id):
+    """删除分享"""
+    try:
+        user_id = get_current_user()
+        
+        # 验证分享是否属于当前用户
+        result = supabase.table('family_shares').select('id').eq('id', share_id).eq('user_id', user_id).execute()
+        if not result.data:
+            return jsonify({'error': '分享不存在或无权操作'}), 404
+        
+        # 删除分享
+        supabase.table('family_shares').delete().eq('id', share_id).execute()
+        
+        return jsonify({
+            'message': '分享删除成功'
+        })
+    except Exception as e:
+        print(f'删除分享失败: {str(e)}')
+        return jsonify({'error': '删除分享失败，请稍后重试'}), 500
+
+@app.route('/api/shares/verify/<share_code>', methods=['GET'])
+def verify_share(share_code):
+    """验证分享码是否有效"""
+    try:
+        result = supabase.table('family_shares').select('*').eq('share_code', share_code).eq('is_active', True).execute()
+        
+        if not result.data:
+            return jsonify({'error': '分享链接无效或已过期'}), 404
+        
+        share = result.data[0]
+        return jsonify({
+            'valid': True,
+            'share': share
+        })
+    except Exception as e:
+        print(f'验证分享码失败: {str(e)}')
+        return jsonify({'error': '验证分享码失败，请稍后重试'}), 500
+
+@app.route('/api/shares/data/<share_code>', methods=['GET'])
+def get_share_data(share_code):
+    """获取分享的家族数据"""
+    try:
+        # 验证分享码
+        share_result = supabase.table('family_shares').select('*').eq('share_code', share_code).eq('is_active', True).execute()
+        
+        if not share_result.data:
+            return jsonify({'error': '分享链接无效或已过期'}), 404
+        
+        share = share_result.data[0]
+        user_id = share['user_id']
+        
+        # 获取家族成员数据
+        members_response = supabase.table('members').select('*').eq('user_id', user_id).execute()
+        members_data = members_response.data
+        
+        # 获取配偶关系数据
+        spouses_response = supabase.table('spouses').select('*').eq('user_id', user_id).execute()
+        spouses_data = spouses_response.data
+        
+        # 获取子女关系数据
+        children_response = supabase.table('children').select('*').eq('user_id', user_id).execute()
+        children_data = children_response.data
+        
+        return jsonify({
+            'members': members_data,
+            'spouses': spouses_data,
+            'children': children_data
+        })
+    except Exception as e:
+        print(f'获取分享数据失败: {str(e)}')
+        return jsonify({'error': '获取分享数据失败，请稍后重试'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

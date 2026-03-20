@@ -5,3 +5,4 @@ lunar-python
 python-dotenv
 bcrypt
 PyJWT
+qrcode[pil]
