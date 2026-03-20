@@ -162,6 +162,10 @@
           <i class="fa fa-download mr-1"></i> 导出
         </button>
         
+        <button id="shareBtn" class="bg-transparent border border-white px-3 py-1 rounded-md text-sm font-medium hover:bg-white hover:bg-opacity-10 transition-colors">
+          <i class="fa fa-share-alt mr-1"></i> 分享
+        </button>
+        
         <!-- 用户菜单 -->
         <div id="userMenu" class="relative">
           <button id="userMenuBtn" class="flex items-center space-x-2 text-white hover:text-secondary transition-colors">
@@ -543,10 +547,25 @@
   </div>
 
   <script>
-    // 全局配置
-    const config = {
-      apiBaseUrl: 'https://family-tree-app-lake.vercel.app'
+    // 全局配置 - 根据环境自动切换API地址
+    const getApiBaseUrl = () => {
+      const hostname = window.location.hostname;
+      
+      // 本地开发环境
+      if (hostname === '127.0.0.1' || hostname === 'localhost') {
+        return 'http://127.0.0.1:5001';
+      }
+      
+      // GitHub Pages或其他生产环境
+      return 'https://family-tree-app-lake.vercel.app';
     };
+    
+    const config = {
+      apiBaseUrl: getApiBaseUrl()
+    };
+    
+    console.log('当前环境:', window.location.hostname);
+    console.log('API地址:', config.apiBaseUrl);
     
     // 用户认证
     let authToken = localStorage.getItem('authToken');
@@ -3404,6 +3423,149 @@
       // 导出为Excel文件
       XLSX.writeFile(workbook, 'family_tree_import_template.xlsx');
     }
+    
+    // 分享功能
+    document.addEventListener('DOMContentLoaded', function() {
+      // 打开分享模态框
+      document.getElementById('shareBtn').addEventListener('click', function() {
+        document.getElementById('shareModal').classList.remove('hidden');
+        loadSharesList();
+      });
+      
+      // 关闭分享模态框
+      document.getElementById('closeShareModal').addEventListener('click', function() {
+        document.getElementById('shareModal').classList.add('hidden');
+      });
+      
+      // 生成分享链接
+      document.getElementById('generateShareBtn').addEventListener('click', function() {
+        showLoading('生成分享链接中...');
+        
+        fetch(`${config.apiBaseUrl}/api/shares`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          hideLoading();
+          if (data.error) {
+            alert(data.error);
+          } else {
+            document.getElementById('shareUrl').value = data.share_url;
+            document.getElementById('qrcodeContainer').innerHTML = `<img src="${data.qr_code}" alt="分享二维码" class="w-48 h-48">`;
+            document.getElementById('shareResult').classList.remove('hidden');
+            loadSharesList();
+            showMessage('分享链接生成成功');
+          }
+        })
+        .catch(error => {
+          hideLoading();
+          console.error('生成分享链接失败:', error);
+          alert('生成分享链接失败，请稍后重试');
+        });
+      });
+      
+      // 复制分享链接
+      document.getElementById('copyShareUrl').addEventListener('click', function() {
+        const shareUrl = document.getElementById('shareUrl');
+        shareUrl.select();
+        document.execCommand('copy');
+        showMessage('链接已复制到剪贴板');
+      });
+      
+      // 加载分享列表
+      function loadSharesList() {
+        fetch(`${config.apiBaseUrl}/api/shares`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            console.error('获取分享列表失败:', data.error);
+          } else {
+            const sharesListContent = document.getElementById('sharesListContent');
+            if (data.shares.length === 0) {
+              sharesListContent.innerHTML = '<p class="text-gray-500 text-sm text-center">暂无分享记录</p>';
+            } else {
+              sharesListContent.innerHTML = data.shares.map(share => `
+                <div class="flex justify-between items-center p-2 border rounded-md">
+                  <div>
+                    <p class="text-sm font-medium">${share.share_code}</p>
+                    <p class="text-xs text-gray-500">${new Date(share.created_at).toLocaleString()}</p>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button class="text-xs px-2 py-1 ${share.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} rounded-md" onclick="toggleShareStatus('${share.id}', ${!share.is_active})">
+                      ${share.is_active ? '禁用' : '启用'}
+                    </button>
+                    <button class="text-xs px-2 py-1 bg-gray-100 text-gray-800 rounded-md" onclick="deleteShare('${share.id}')">
+                      删除
+                    </button>
+                  </div>
+                </div>
+              `).join('');
+            }
+          }
+        })
+        .catch(error => {
+          console.error('获取分享列表失败:', error);
+        });
+      }
+      
+      // 切换分享状态
+      window.toggleShareStatus = function(shareId, isActive) {
+        fetch(`${config.apiBaseUrl}/api/shares/${shareId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({ is_active: isActive })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            alert(data.error);
+          } else {
+            loadSharesList();
+            showMessage('分享状态已更新');
+          }
+        })
+        .catch(error => {
+          console.error('更新分享状态失败:', error);
+          alert('更新分享状态失败，请稍后重试');
+        });
+      };
+      
+      // 删除分享
+      window.deleteShare = function(shareId) {
+        if (confirm('确定要删除这个分享链接吗？')) {
+          fetch(`${config.apiBaseUrl}/api/shares/${shareId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+            }
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.error) {
+              alert(data.error);
+            } else {
+              loadSharesList();
+              showMessage('分享链接已删除');
+            }
+          })
+          .catch(error => {
+            console.error('删除分享失败:', error);
+            alert('删除分享失败，请稍后重试');
+          });
+        }
+      };
+    });
   </script>
 
   <!-- 照片编辑器弹窗 -->
@@ -3443,6 +3605,52 @@
     <div class="bg-white rounded-lg shadow-xl p-6 flex flex-col items-center">
       <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
       <p id="loadingText" class="text-lg font-medium">加载中...</p>
+    </div>
+  </div>
+
+  <!-- 分享功能模态框 -->
+  <div id="shareModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">分享家族树</h3>
+        <button id="closeShareModal" class="text-gray-400 hover:text-gray-500">
+          <i class="fa fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <div class="mb-4">
+        <p class="text-gray-600 mb-2">生成分享链接和二维码，让他人可以查看您的家族树</p>
+        
+        <button id="generateShareBtn" class="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-opacity-90 transition-colors">
+          <i class="fa fa-link mr-2"></i> 生成分享链接
+        </button>
+      </div>
+      
+      <div id="shareResult" class="hidden">
+        <div class="border-t pt-4 mt-4">
+          <h4 class="font-medium text-gray-700 mb-2">分享链接</h4>
+          <div class="flex">
+            <input type="text" id="shareUrl" class="flex-1 border rounded-l-md px-3 py-2 text-sm" readonly>
+            <button id="copyShareUrl" class="bg-secondary text-dark px-3 py-2 rounded-r-md hover:bg-opacity-90 transition-colors">
+              <i class="fa fa-copy"></i>
+            </button>
+          </div>
+          
+          <h4 class="font-medium text-gray-700 mt-4 mb-2">二维码</h4>
+          <div class="flex justify-center">
+            <div id="qrcodeContainer" class="p-4 bg-white border rounded-md shadow-sm"></div>
+          </div>
+          
+          <p class="text-sm text-gray-500 mt-2 text-center">扫描二维码或复制链接分享给他人</p>
+        </div>
+      </div>
+      
+      <div id="sharesList" class="mt-4 border-t pt-4">
+        <h4 class="font-medium text-gray-700 mb-2">历史分享</h4>
+        <div id="sharesListContent" class="space-y-2 max-h-48 overflow-y-auto">
+          <p class="text-gray-500 text-sm text-center">暂无分享记录</p>
+        </div>
+      </div>
     </div>
   </div>
 
