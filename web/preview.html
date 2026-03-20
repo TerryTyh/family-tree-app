@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家族图谱 - 预览</title>
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- SheetJS Library for Excel handling -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#8B4513',
+            secondary: '#D2B48C',
+            accent: '#A0522D',
+            light: '#F5F5DC',
+            dark: '#3E2723'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'inner-lg': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      .node-transition {
+        transition: all 0.3s ease;
+      }
+      .canvas-container {
+        touch-action: none;
+      }
+      .form-input-focus:focus {
+        @apply ring-2 ring-primary/50 border-primary;
+      }
+    }
+  </style>
+  
+  <style>
+    body {
+      background-color: #F5F5DC;
+      color: #3E2723;
+    }
+    
+    .family-node {
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .family-node:hover {
+      filter: brightness(1.1);
+    }
+    
+    .family-node.selected {
+      stroke-width: 3px;
+      stroke: #8B4513;
+    }
+    
+    .relationship-line {
+      stroke: #8B4513;
+      stroke-width: 2px;
+    }
+    
+    .relationship-line.marriage {
+      stroke-dasharray: 5, 3;
+    }
+    
+    .canvas-container {
+      position: relative;
+      overflow: hidden;
+      background-color: #F5F5DC;
+      background-image: 
+        linear-gradient(rgba(139, 69, 19, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 69, 19, 0.05) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    
+    #familyCanvas {
+      display: block;
+    }
+    
+    .zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+    }
+    
+    .node-tooltip {
+      position: absolute;
+      background-color: rgba(255, 255, 255, 0.95);
+      border: 1px solid #8B4513;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 14px;
+      pointer-events: none;
+      z-index: 20;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      max-width: 250px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    
+    .panel-transition {
+      transition: transform 0.3s ease-in-out;
+    }
+    
+    @media (max-width: 768px) {
+      .side-panel {
+        transform: translateX(-100%);
+      }
+      
+      .side-panel.open {
+        transform: translateX(0);
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- 顶部导航栏 -->
+  <header class="bg-primary text-white shadow-md">
+    <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <img src="https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/99b7c13e6af042b087a4e31c34aa42eb~tplv-a9rns2rl98-image.image?lk3s=8e244e95&amp;rcl=2026022107294392EA892CE8AD3175A76F&amp;rrcfp=f06b921b&amp;x-expires=1774222204&amp;x-signature=R87tClMhjJjlrJ9Hzakcqh7Og7I%3D" alt="家族树图标" class="h-8 w-8">
+        <h1 class="text-xl font-bold">家族图谱 - 预览</h1>
+      </div>
+      
+      <div class="hidden md:flex items-center space-x-4">
+        <div class="relative">
+          <input type="text" id="searchInput" placeholder="搜索家族成员..." class="px-3 py-1 rounded-full text-sm text-dark focus:outline-none focus:ring-2 focus:ring-secondary w-48 lg:w-64">
+          <button class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500">
+            <i class="fa fa-search"></i>
+          </button>
+        </div>
+      </div>
+      
+      <button id="mobileMenuBtn" class="md:hidden text-white focus:outline-none">
+        <i class="fa fa-bars text-xl"></i>
+      </button>
+    </div>
+    
+    <!-- 移动端菜单 -->
+    <div id="mobileMenu" class="md:hidden bg-primary hidden">
+      <div class="container mx-auto px-4 py-2 space-y-2">
+        <div class="relative">
+          <input type="text" placeholder="搜索家族成员..." class="w-full px-3 py-2 rounded-full text-sm text-dark focus:outline-none focus:ring-2 focus:ring-secondary">
+          <button class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+            <i class="fa fa-search"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要内容区域 -->
+  <main class="flex-1 flex flex-col md:flex-row">
+    <!-- 左侧控制面板 -->
+    <aside id="sidePanel" class="side-panel panel-transition w-full md:w-80 bg-white shadow-lg md:shadow-none z-10 md:z-0">
+      <div class="p-4 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-primary">家族成员</h2>
+          <button id="closePanelBtn" class="md:hidden text-gray-500 focus:outline-none">
+            <i class="fa fa-times"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- 面板内容 - 默认显示成员列表 -->
+      <div id="panelContent">
+        <!-- 成员列表 -->
+        <div id="membersPanel" class="h-full flex flex-col">
+          <div class="p-4 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+              <h3 class="font-medium">家族成员</h3>
+              <!-- 隐藏添加按钮 -->
+            </div>
+          </div>
+          
+          <div class="flex-1 overflow-y-auto p-2">
+            <ul id="membersList" class="space-y-2">
+              <!-- 成员列表将通过JavaScript动态生成 -->
+            </ul>
+          </div>
+        </div>
+        
+        <!-- 成员详情面板 -->
+        <div id="memberDetailsPanel" class="h-full flex flex-col hidden">
+          <div class="p-4 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+              <h3 class="font-medium">成员详情</h3>
+              <button id="closeDetailsBtn" class="text-gray-500 hover:text-gray-700 focus:outline-none">
+                <i class="fa fa-times"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div class="flex-1 overflow-y-auto p-4">
+            <div id="memberDetailsContent" class="space-y-4">
+              <!-- 成员详情将通过JavaScript动态生成 -->
+            </div>
+          </div>
+          
+          <div class="p-4 border-t border-gray-200 bg-gray-50">
+            <div class="flex justify-end space-x-3">
+              <!-- 隐藏编辑按钮 -->
+              <button id="closeDetailsPanelBtn" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-accent focus:outline-none">
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- 右侧家族树视图 -->
+    <div class="flex-1 flex flex-col">
+      <div class="bg-white shadow-sm p-3 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <button id="togglePanelBtn" class="md:hidden text-primary hover:text-accent focus:outline-none">
+            <i class="fa fa-bars"></i>
+          </button>
+          
+          <div class="flex items-center space-x-2">
+            <button id="zoomInBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+              <i class="fa fa-search-plus"></i>
+            </button>
+            <span id="zoomLevel" class="text-sm font-medium">100%</span>
+            <button id="zoomOutBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+              <i class="fa fa-search-minus"></i>
+            </button>
+            <button id="resetZoomBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+              <i class="fa fa-arrows-alt"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex-1 canvas-container">
+        <canvas id="familyCanvas"></canvas>
+        <div id="nodeTooltip" class="node-tooltip"></div>
+        
+        <div class="zoom-controls bg-white rounded-full shadow-md flex">
+          <button id="zoomInControl" class="w-10 h-10 flex items-center justify-center text-primary hover:bg-gray-100 rounded-l-full focus:outline-none">
+            <i class="fa fa-plus"></i>
+          </button>
+          <button id="zoomOutControl" class="w-10 h-10 flex items-center justify-center text-primary hover:bg-gray-100 rounded-r-full focus:outline-none">
+            <i class="fa fa-minus"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 加载遮罩 -->
+  <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
+      <h3 class="text-lg font-semibold text-primary mb-2">加载中...</h3>
+      <p id="loadingText" class="text-gray-600">正在加载家族数据，请稍候...</p>
+    </div>
+  </div>
+
+  <!-- 错误提示 -->
+  <div id="errorMessage" class="fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-md hidden z-50">
+    <strong class="font-bold">错误!</strong>
+    <span id="errorText" class="block sm:inline"> 加载数据失败，请重试。</span>
+  </div>
+
+  <script>
+    // 配置 - 根据环境自动切换API地址
+    const getApiBaseUrl = () => {
+      const hostname = window.location.hostname;
+      
+      // 本地开发环境
+      if (hostname === '127.0.0.1' || hostname === 'localhost') {
+        return 'http://localhost:5001';
+      }
+      
+      // GitHub Pages或其他生产环境
+      return 'https://family-tree-app-lake.vercel.app';
+    };
+    
+    const config = {
+      apiBaseUrl: getApiBaseUrl()
+    };
+    
+    console.log('当前环境:', window.location.hostname);
+    console.log('API地址:', config.apiBaseUrl);
+    
+    // 全局变量
+    let familyData = {
+      members: [],
+      rootMemberId: null,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    let selectedMemberId = null;
+    let canvas, ctx;
+    let scale = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+    let isDragging = false;
+    let dragStartX, dragStartY;
+    let nodes = [];
+    let lines = [];
+    
+    // 从URL获取分享码
+    function getShareCode() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('code');
+    }
+    
+    // 显示加载UI
+    function showLoading(text = '加载中...') {
+      const loadingText = document.getElementById('loadingText');
+      if (loadingText) {
+        loadingText.textContent = text;
+      }
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+      }
+    }
+    
+    // 隐藏加载UI
+    function hideLoading() {
+      const loadingOverlay = document.getElementById('loadingOverlay');
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+      }
+    }
+    
+    // 显示错误信息
+    function showError(message) {
+      const errorMessage = document.getElementById('errorMessage');
+      const errorText = document.getElementById('errorText');
+      if (errorText) {
+        errorText.textContent = message;
+      }
+      if (errorMessage) {
+        errorMessage.classList.remove('hidden');
+        // 3秒后自动隐藏
+        setTimeout(() => {
+          errorMessage.classList.add('hidden');
+        }, 3000);
+      }
+      hideLoading();
+    }
+    
+    // 加载分享数据
+    async function loadShareData() {
+      const shareCode = getShareCode();
+      
+      // 测试模式：如果没有分享码，使用测试数据
+      if (!shareCode) {
+        console.log('进入测试模式，使用测试数据');
+        
+        // 测试数据
+        familyData = {
+          members: [
+            { id: '1', name: '张三', gender: 'male', birthDate: '1950-01-01', birthTime: '08:00', deathDate: '2020-01-01', deathTime: '12:00', bio: '家族 patriarch', fatherId: null, motherId: null, spouseIds: ['2'], children: ['3', '4'], lunarBirthDate: '己丑年冬月十三', baZi: { full: '己丑 丙子 庚辰 庚辰', year: '己丑', month: '丙子', day: '庚辰', time: '庚辰' } },
+            { id: '2', name: '李四', gender: 'female', birthDate: '1952-01-01', birthTime: '09:00', deathDate: null, deathTime: null, bio: '家族 matriarch', fatherId: null, motherId: null, spouseIds: ['1'], children: ['3', '4'], lunarBirthDate: '辛卯年冬月十五', baZi: { full: '辛卯 庚子 甲子 己巳', year: '辛卯', month: '庚子', day: '甲子', time: '己巳' } },
+            { id: '3', name: '张小明', gender: 'male', birthDate: '1975-01-01', birthTime: '10:00', deathDate: null, deathTime: null, bio: '长子', fatherId: '1', motherId: '2', spouseIds: [], children: [], lunarBirthDate: '甲寅年冬月十九', baZi: { full: '甲寅 丙子 丙午 癸巳', year: '甲寅', month: '丙子', day: '丙午', time: '癸巳' } },
+            { id: '4', name: '张小红', gender: 'female', birthDate: '1978-01-01', birthTime: '11:00', deathDate: null, deathTime: null, bio: '长女', fatherId: '1', motherId: '2', spouseIds: [], children: [], lunarBirthDate: '丁巳年冬月二十二', baZi: { full: '丁巳 壬子 癸亥 戊午', year: '丁巳', month: '壬子', day: '癸亥', time: '戊午' } }
+          ],
+          rootMemberId: '1',
+          lastUpdated: new Date().toISOString()
+        };
+        
+        // 初始化应用
+        await initApp();
+        return;
+      }
+      
+      try {
+        console.log('开始加载分享数据，分享码:', shareCode);
+        console.log('API地址:', `${config.apiBaseUrl}/api/shares/data/${shareCode}`);
+        
+        const response = await fetch(`${config.apiBaseUrl}/api/shares/data/${shareCode}`);
+        console.log('API响应状态:', response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API响应错误:', errorText);
+          throw new Error(`加载分享数据失败: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('API响应数据:', data);
+        
+        // 验证数据格式
+        if (!data || !data.members || !Array.isArray(data.members)) {
+          throw new Error('分享数据格式不正确');
+        }
+        
+        // 转换数据结构
+        console.log('开始转换数据结构');
+        const transformedMembers = data.members.map(member => {
+          // 解析生辰八字
+          let baZi = null;
+          if (member.ba_zi) {
+            const baZiStr = member.ba_zi;
+            // ba_zi格式：年柱(2字符) + 月柱(2字符) + 日柱(2字符) + 时柱(2字符)
+            baZi = {
+              full: baZiStr,
+              year: baZiStr.substring(0, 2),
+              month: baZiStr.substring(2, 4),
+              day: baZiStr.substring(4, 6),
+              time: baZiStr.substring(6, 8)
+            };
+          }
+          
+          return {
+            id: member.id,
+            name: member.name,
+            gender: member.gender,
+            birthDate: member.birth_date,
+            birthTime: member.birth_time,
+            deathDate: member.death_date,
+            deathTime: member.death_time,
+            bio: member.bio,
+            fatherId: member.father_id,
+            motherId: member.mother_id,
+            photo: member.photo,
+            lunarBirthDate: member.lunar_birth_date,
+            baZi: baZi,
+            spouseIds: []
+          };
+        });
+        
+        // 处理配偶关系
+        if (data.spouses && Array.isArray(data.spouses)) {
+          data.spouses.forEach(spouse => {
+            const member = transformedMembers.find(m => m.id === spouse.member_id);
+            if (member && !member.spouseIds.includes(spouse.spouse_id)) {
+              member.spouseIds.push(spouse.spouse_id);
+            }
+          });
+        }
+        
+        familyData = {
+          members: transformedMembers,
+          rootMemberId: data.rootMemberId || transformedMembers[0]?.id,
+          lastUpdated: new Date().toISOString()
+        };
+        
+        console.log('转换后的数据:', familyData);
+        
+        // 初始化应用
+        await initApp();
+      } catch (error) {
+        console.error('加载分享数据失败:', error);
+        showError(`加载分享数据失败: ${error.message}`);
+      }
+    }
+    
+    // 初始化应用
+    async function initApp() {
+      try {
+        // 显示初始化loading
+        console.log('显示初始化loading');
+        showLoading('初始化中...');
+        
+        console.log('初始化Canvas');
+        initCanvas();
+        console.log('设置事件监听器');
+        setupEventListeners();
+        
+        // 加载数据并在完成后更新UI
+        console.log('开始加载家族数据');
+        console.log('家族数据:', familyData);
+        
+        // 验证数据
+        if (!familyData || !familyData.members || familyData.members.length === 0) {
+          throw new Error('家族数据为空或格式不正确');
+        }
+        
+        console.log('更新成员列表');
+        updateMembersList();
+        
+        console.log('渲染家族树');
+        renderFamilyTree();
+        
+        // 隐藏loading
+        console.log('隐藏loading');
+        hideLoading();
+        console.log('=== 页面初始化完成 ===');
+      } catch (error) {
+        console.error('初始化失败:', error);
+        // 显示错误提示
+        showError(`初始化失败: ${error.message}`);
+        // 即使加载失败也隐藏loading
+        console.log('隐藏loading（初始化失败）');
+        hideLoading();
+        console.log('=== 页面初始化完成（失败） ===');
+      }
+    }
+    
+    // 初始化Canvas
+    function initCanvas() {
+      canvas = document.getElementById('familyCanvas');
+      ctx = canvas.getContext('2d');
+      
+      // 设置Canvas尺寸
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+    }
+    
+    // 调整Canvas尺寸
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      
+      // 如果有数据，重新绘制家族树
+      if (familyData.members.length > 0) {
+        renderFamilyTree();
+      }
+    }
+    
+    // 设置事件监听器
+    function setupEventListeners() {
+      // 移动端菜单
+      document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+        const mobileMenu = document.getElementById('mobileMenu');
+        mobileMenu.classList.toggle('hidden');
+      });
+      
+      // 侧边栏切换
+      document.getElementById('togglePanelBtn').addEventListener('click', function() {
+        const sidePanel = document.getElementById('sidePanel');
+        sidePanel.classList.toggle('open');
+      });
+      
+      document.getElementById('closePanelBtn').addEventListener('click', function() {
+        document.getElementById('sidePanel').classList.remove('open');
+      });
+      
+      // 面板切换
+      document.getElementById('closeDetailsBtn').addEventListener('click', showMembersPanel);
+      document.getElementById('closeDetailsPanelBtn').addEventListener('click', showMembersPanel);
+      
+      // 缩放控制
+      document.getElementById('zoomInBtn').addEventListener('click', zoomIn);
+      document.getElementById('zoomOutBtn').addEventListener('click', zoomOut);
+      document.getElementById('resetZoomBtn').addEventListener('click', resetZoom);
+      document.getElementById('zoomInControl').addEventListener('click', zoomIn);
+      document.getElementById('zoomOutControl').addEventListener('click', zoomOut);
+      
+      // 搜索功能
+      document.getElementById('searchInput').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        filterMembersList(searchTerm);
+      });
+      
+      // Canvas拖拽和缩放
+      canvas.addEventListener('mousedown', startDrag);
+      canvas.addEventListener('mousemove', drag);
+      canvas.addEventListener('mouseup', endDrag);
+      canvas.addEventListener('mouseleave', endDrag);
+      canvas.addEventListener('wheel', zoom);
+      
+      // 触摸事件支持
+      canvas.addEventListener('touchstart', handleTouchStart);
+      canvas.addEventListener('touchmove', handleTouchMove);
+      canvas.addEventListener('touchend', handleTouchEnd);
+    }
+    
+    // 显示成员列表面板
+    function showMembersPanel() {
+      document.getElementById('membersPanel').classList.remove('hidden');
+      document.getElementById('memberDetailsPanel').classList.add('hidden');
+    }
+    
+    // 格式化日期
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      
+      const date = new Date(dateString);
+      return date.toLocaleDateString('zh-CN');
+    }
+    
+    // 获取子女列表
+    function getChildren(memberId) {
+      return familyData.members
+        .filter(m => m.fatherId === memberId || m.motherId === memberId)
+        .map(m => m.id);
+    }
+    
+    // 获取成员姓名
+    function getMemberName(memberId) {
+      const member = familyData.members.find(m => m.id === memberId);
+      return member ? member.name : '未知';
+    }
+    
+    // 获取成员照片
+    function getMemberPhoto(memberId) {
+      const member = familyData.members.find(m => m.id === memberId);
+      return member ? member.photo : null;
+    }
+    
+    // 显示成员详情面板
+    function showMemberDetails(memberId) {
+      const member = familyData.members.find(m => m.id === memberId);
+      if (!member) return;
+      
+      console.log('=== 显示成员详情 ===');
+      console.log('成员数据:', member);
+      console.log('成员生日:', member.birthDate);
+      console.log('成员农历生日:', member.lunarBirthDate);
+      console.log('成员生辰八字:', member.baZi);
+      console.log('成员父亲ID:', member.fatherId);
+      console.log('成员母亲ID:', member.motherId);
+      console.log('成员配偶ID:', member.spouseIds);
+      console.log('成员子女:', getChildren(member.id));
+      
+      selectedMemberId = memberId;
+      
+      const defaultAvatar = 'https://p26-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/1877fbaeebdc492193e52a9443a71588~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=2026022107294392EA892CE8AD3175A76F&rrcfp=f06b921b&x-expires=1774222213&x-signature=nl3mjnH872EmFBEJPocudhhTLm4%3D';
+      
+      // 构建详情HTML
+      console.log('开始构建详情HTML');
+      let detailsHTML = `
+        <div class="flex flex-col items-center mb-6">
+          <div class="w-24 h-24 rounded-full overflow-hidden mb-3 border-2 border-primary">
+            <img src="${member.photo || defaultAvatar}" 
+                 alt="${member.name}" class="w-full h-full object-cover">
+          </div>
+          <h3 class="text-xl font-bold text-primary">${member.name}</h3>
+          <p class="text-gray-600">${member.gender === 'male' ? '男' : '女'}</p>
+        </div>
+        
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">公历生日</h4>
+              <p>${formatDate(member.birthDate) || '未知'} ${member.birthTime ? member.birthTime : ''}</p>
+            </div>
+            ${member.lunarBirthDate ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">农历生日</h4>
+              <p>${member.lunarBirthDate}</p>
+            </div>
+            ` : ''}
+          </div>
+          
+          ${member.baZi ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">生辰八字</h4>
+              <p class="font-medium">${member.baZi.full}</p>
+              <div class="grid grid-cols-2 gap-2 mt-1 text-sm">
+                <div>
+                  <span class="text-gray-500">年柱：</span>
+                  <span>${member.baZi.year}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">月柱：</span>
+                  <span>${member.baZi.month}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">日柱：</span>
+                  <span>${member.baZi.day}</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">时柱：</span>
+                  <span>${member.baZi.time}</span>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${member.deathDate ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">去世日期</h4>
+              <p>${formatDate(member.deathDate)}</p>
+            </div>
+          ` : ''}
+          
+          ${member.bio ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-500 mb-1">生平简介</h4>
+              <p class="whitespace-pre-line">${member.bio}</p>
+            </div>
+          ` : ''}
+        </div>
+        
+        <div class="border-t border-gray-200 pt-4 mt-4">
+          <h4 class="text-sm font-medium text-gray-700 mb-3">家庭关系</h4>
+          
+          <div class="space-y-3">
+            ${member.fatherId ? `
+              <div>
+                <h5 class="text-sm font-medium text-gray-500 mb-1">父亲</h5>
+                <div class="flex items-center">
+                  <div class="w-8 h-8 rounded-full overflow-hidden mr-2">
+                    <img src="${getMemberPhoto(member.fatherId) || defaultAvatar}" 
+                         alt="${getMemberName(member.fatherId)}" class="w-full h-full object-cover">
+                  </div>
+                  <span>${getMemberName(member.fatherId)}</span>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${member.motherId ? `
+              <div>
+                <h5 class="text-sm font-medium text-gray-500 mb-1">母亲</h5>
+                <div class="flex items-center">
+                  <div class="w-8 h-8 rounded-full overflow-hidden mr-2">
+                    <img src="${getMemberPhoto(member.motherId) || defaultAvatar}" 
+                         alt="${getMemberName(member.motherId)}" class="w-full h-full object-cover">
+                  </div>
+                  <span>${getMemberName(member.motherId)}</span>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${member.spouseIds && member.spouseIds.length > 0 ? `
+              <div>
+                <h5 class="text-sm font-medium text-gray-500 mb-1">配偶</h5>
+                <div class="space-y-2">
+                  ${member.spouseIds.map(spouseId => `
+                    <div class="flex items-center">
+                      <div class="w-8 h-8 rounded-full overflow-hidden mr-2">
+                        <img src="${getMemberPhoto(spouseId) || defaultAvatar}" 
+                             alt="${getMemberName(spouseId)}" class="w-full h-full object-cover">
+                      </div>
+                      <span>${getMemberName(spouseId)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${getChildren(member.id).length > 0 ? `
+              <div>
+                <h5 class="text-sm font-medium text-gray-500 mb-1">子女</h5>
+                <div class="space-y-2">
+                  ${getChildren(member.id).map(childId => {
+                    const child = familyData.members.find(m => m.id === childId);
+                    if (!child) return '';
+                    return `
+                      <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full overflow-hidden mr-2">
+                          <img src="${child.photo || defaultAvatar}" 
+                               alt="${child.name}" class="w-full h-full object-cover">
+                        </div>
+                        <span>${child.name}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('memberDetailsContent').innerHTML = detailsHTML;
+      document.getElementById('membersPanel').classList.add('hidden');
+      document.getElementById('memberDetailsPanel').classList.remove('hidden');
+    }
+    
+    // 格式化日期
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      
+      const date = new Date(dateString);
+      return date.toLocaleDateString('zh-CN');
+    }
+    
+    // 获取子女列表
+    function getChildren(memberId) {
+      return familyData.members
+        .filter(m => m.fatherId === memberId || m.motherId === memberId)
+        .map(m => m.id);
+    }
+    
+    // 更新成员列表
+    function updateMembersList() {
+      const membersList = document.getElementById('membersList');
+      if (!membersList) return;
+      
+      membersList.innerHTML = '';
+      
+      if (familyData.members.length === 0) {
+        membersList.innerHTML = '<li class="text-center text-gray-500 py-4">暂无成员</li>';
+        return;
+      }
+      
+      // 按姓名排序
+      const sortedMembers = [...familyData.members].sort((a, b) => a.name.localeCompare(b.name));
+      
+      sortedMembers.forEach(member => {
+        const li = document.createElement('li');
+        li.className = 'member-item p-2 hover:bg-gray-100 rounded-md cursor-pointer flex items-center';
+        li.dataset.memberId = member.id;
+        
+        const defaultAvatar = 'https://p26-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/1877fbaeebdc492193e52a9443a71588~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=2026022107294392EA892CE8AD3175A76F&rrcfp=f06b921b&x-expires=1774222213&x-signature=nl3mjnH872EmFBEJPocudhhTLm4%3D';
+        
+        li.innerHTML = `
+          <div class="w-8 h-8 rounded-full overflow-hidden mr-2">
+            <img src="${member.photo || defaultAvatar}" 
+                 alt="${member.name}" class="w-full h-full object-cover">
+          </div>
+          <div class="flex-1">
+            <p class="font-medium">${member.name}</p>
+            <p class="text-xs text-gray-500">${formatDate(member.birthDate)} ${member.deathDate ? ' - ' + formatDate(member.deathDate) : ''}</p>
+          </div>
+          <div class="text-gray-400">
+            <i class="fa fa-chevron-right"></i>
+          </div>
+        `;
+        
+        li.addEventListener('click', function() {
+          showMemberDetails(member.id);
+        });
+        
+        membersList.appendChild(li);
+      });
+    }
+    
+    // 过滤成员列表
+    function filterMembersList(searchTerm) {
+      const memberItems = document.querySelectorAll('.member-item');
+      memberItems.forEach(item => {
+        const memberName = item.querySelector('.font-medium').textContent.toLowerCase();
+        const memberInfo = item.querySelector('.text-xs').textContent.toLowerCase();
+        
+        if (memberName.includes(searchTerm) || memberInfo.includes(searchTerm)) {
+          item.classList.remove('hidden');
+        } else {
+          item.classList.add('hidden');
+        }
+      });
+    }
+    
+    // 渲染家族树
+    function renderFamilyTree() {
+      if (!canvas || !ctx) return;
+      
+      // 清空Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // 重置节点和连接线
+      nodes = [];
+      lines = [];
+      
+      // 构建家族树结构
+      buildFamilyTree();
+      
+      // 计算布局
+      calculateLayout();
+      
+      // 计算连接线
+      calculateLines();
+      
+      // 绘制连接线
+      drawLines();
+      
+      // 绘制节点
+      drawNodes();
+    }
+    
+    // 构建家族树结构
+    function buildFamilyTree() {
+      // 找到所有没有父母的成员作为根节点
+      const rootNodes = familyData.members.filter(member => !member.fatherId && !member.motherId);
+      
+      console.log('=== 开始构建家族树 ===');
+      console.log('根节点数量:', rootNodes.length);
+      
+      // 为每个根节点构建家族树
+      rootNodes.forEach(rootMember => {
+        console.log('处理根节点:', rootMember.name);
+        if (!nodes.find(n => n.id === rootMember.id)) {
+          buildFamilyTreeRecursive(rootMember);
+        }
+      });
+      
+      // 确保所有成员都被添加到nodes中
+      familyData.members.forEach(member => {
+        if (!nodes.find(n => n.id === member.id)) {
+          console.log('添加未处理的成员:', member.name);
+          buildFamilyTreeRecursive(member);
+        }
+      });
+      
+      console.log('总节点数量:', nodes.length);
+    }
+    
+    // 递归构建家族树
+    function buildFamilyTreeRecursive(member) {
+      // 检查是否已经添加
+      if (nodes.find(n => n.id === member.id)) {
+        return;
+      }
+      
+      // 添加当前节点
+      nodes.push({
+        id: member.id,
+        name: member.name
+      });
+      
+      console.log('  添加节点:', member.name);
+      
+      // 添加配偶
+      if (member.spouseIds) {
+        member.spouseIds.forEach(spouseId => {
+          const spouse = familyData.members.find(m => m.id === spouseId);
+          if (spouse) {
+            buildFamilyTreeRecursive(spouse);
+          }
+        });
+      }
+      
+      // 添加子女
+      const children = getChildren(member.id);
+      children.forEach(childId => {
+        const child = familyData.members.find(m => m.id === childId);
+        if (child) {
+          buildFamilyTreeRecursive(child);
+        }
+      });
+    }
+    
+    // 计算布局
+    function calculateLayout() {
+      if (nodes.length === 0) return;
+      
+      const nodeWidth = 100;
+      const nodeHeight = 160;
+      const horizontalGap = 150;
+      const verticalGap = 250;
+      
+      console.log('=== 开始计算布局 ===');
+      console.log('节点数量:', nodes.length);
+      
+      // 简单的层级布局
+      const levels = [];
+      
+      // 计算每个节点的层级
+      nodes.forEach(node => {
+        let level = 0;
+        let currentMember = familyData.members.find(m => m.id === node.id);
+        
+        // 找到最高层级的祖先
+        while (true) {
+          const parent = familyData.members.find(m => {
+            return m.id === currentMember.fatherId || m.id === currentMember.motherId;
+          });
+          
+          if (!parent) break;
+          
+          level++;
+          currentMember = parent;
+        }
+        
+        if (!levels[level]) {
+          levels[level] = [];
+        }
+        
+        levels[level].push(node);
+      });
+      
+      console.log('层级数量:', levels.length);
+      
+      // 计算每个节点的位置
+      levels.forEach((levelNodes, levelIndex) => {
+        const levelY = 100 + levelIndex * verticalGap;
+        const levelWidth = (levelNodes.length - 1) * (nodeWidth + horizontalGap);
+        const startX = (canvas.width / 2) - (levelWidth / 2);
+        
+        console.log('层级', levelIndex, 'Y位置:', levelY, '节点数量:', levelNodes.length);
+        
+        levelNodes.forEach((node, nodeIndex) => {
+          node.x = startX + nodeIndex * (nodeWidth + horizontalGap) + nodeWidth / 2;
+          node.y = levelY + nodeHeight / 2;
+          node.width = nodeWidth;
+          node.height = nodeHeight;
+          
+          console.log('  节点:', node.name, '位置:', node.x, node.y, '尺寸:', node.width, node.height);
+        });
+      });
+    }
+    
+    // 计算连接线
+    function calculateLines() {
+      lines = [];
+      
+      console.log('=== 开始计算连接线 ===');
+      console.log('节点数量:', nodes.length);
+      
+      nodes.forEach(node => {
+        const member = familyData.members.find(m => m.id === node.id);
+        
+        console.log('处理节点:', member.name, '位置:', node.x, node.y, '尺寸:', node.width, node.height);
+        
+        // 连接到配偶
+        if (member.spouseIds) {
+          member.spouseIds.forEach(spouseId => {
+            // 避免重复绘制婚姻线
+            if (member.id < spouseId) {
+              const spouseNode = nodes.find(n => n.id === spouseId);
+              if (spouseNode) {
+                console.log('  配偶:', spouseNode.name, '位置:', spouseNode.x, spouseNode.y, '尺寸:', spouseNode.width, spouseNode.height);
+                // 卡片左上角坐标
+                const nodeLeft = node.x - node.width / 2;
+                const nodeTop = node.y - node.height / 2;
+                const spouseLeft = spouseNode.x - spouseNode.width / 2;
+                const spouseTop = spouseNode.y - spouseNode.height / 2;
+                
+                lines.push({
+                  type: 'marriage',
+                  from: {
+                    x: nodeLeft + node.width,
+                    y: node.y  // 卡片右侧中间
+                  },
+                  to: {
+                    x: spouseLeft,
+                    y: spouseNode.y  // 卡片左侧中间
+                  },
+                  memberId: member.id,
+                  relatedId: spouseId
+                });
+              }
+            }
+          });
+        }
+        
+        // 连接到子女
+        const children = getChildren(member.id);
+        children.forEach(childId => {
+          const childNode = nodes.find(n => n.id === childId);
+          if (childNode) {
+            console.log('  子女:', childNode.name, '位置:', childNode.x, childNode.y, '尺寸:', childNode.width, childNode.height);
+            // 卡片左上角坐标
+            const nodeLeft = node.x - node.width / 2;
+            const nodeTop = node.y - node.height / 2;
+            const childLeft = childNode.x - childNode.width / 2;
+            const childTop = childNode.y - childNode.height / 2;
+            
+            lines.push({
+              type: 'parent',
+              from: {
+                x: node.x,  // 卡片底部中间
+                y: nodeTop + node.height
+              },
+              to: {
+                x: childNode.x,  // 卡片顶部中间
+                y: childTop
+              },
+              memberId: member.id,
+              relatedId: childId
+            });
+          }
+        });
+      });
+      
+      console.log('连接线数量:', lines.length);
+    }
+    
+    // 绘制连接线
+    function drawLines() {
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+      
+      lines.forEach(line => {
+        ctx.beginPath();
+        ctx.moveTo(line.from.x, line.from.y);
+        ctx.lineTo(line.to.x, line.to.y);
+        
+        if (line.type === 'marriage') {
+          ctx.setLineDash([5, 3]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+      
+      ctx.restore();
+    }
+    
+    // 绘制节点
+    function drawNodes() {
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+      
+      nodes.forEach(node => {
+        if (!node.x || !node.y) return;
+        
+        const member = familyData.members.find(m => m.id === node.id);
+        if (!member) return;
+        
+        const isSelected = selectedMemberId === member.id;
+        const nodeWidth = 100;
+        const nodeHeight = 160;
+        
+        // 绘制节点背景
+        ctx.fillStyle = member.gender === 'male' ? '#D2B48C' : '#FFD6B3';
+        ctx.strokeStyle = isSelected ? '#8B4513' : '#A0522D';
+        ctx.lineWidth = isSelected ? 3 : 1;
+        
+        ctx.beginPath();
+        ctx.roundRect(node.x - nodeWidth / 2, node.y - nodeHeight / 2, nodeWidth, nodeHeight, 8);
+        ctx.fill();
+        ctx.stroke();
+        
+        // 绘制照片或图标
+        if (member.photo) {
+          const img = new Image();
+          img.src = member.photo;
+          
+          // 保存当前状态
+          ctx.save();
+          
+          // 创建长方形裁剪区域（高大于宽）
+          const photoWidth = nodeWidth * 0.7;
+          const photoHeight = photoWidth * 1.3; // 高度大于宽度
+          const photoX = node.x - photoWidth / 2;
+          const photoY = node.y - nodeHeight / 2 + 10;
+          
+          ctx.beginPath();
+          ctx.roundRect(photoX, photoY, photoWidth, photoHeight, 4);
+          ctx.clip();
+          
+          // 绘制图片
+          ctx.drawImage(
+            img,
+            photoX,
+            photoY,
+            photoWidth,
+            photoHeight
+          );
+          
+          // 恢复状态
+          ctx.restore();
+        } else {
+          // 绘制默认图标
+          const iconWidth = nodeWidth * 0.7;
+          const iconHeight = iconWidth * 1.3; // 高度大于宽度
+          const iconX = node.x - iconWidth / 2;
+          const iconY = node.y - nodeHeight / 2 + 10;
+          
+          ctx.fillStyle = member.gender === 'male' ? '#8B4513' : '#CD5C5C';
+          ctx.beginPath();
+          ctx.roundRect(iconX, iconY, iconWidth, iconHeight, 4);
+          ctx.fill();
+          
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold ' + (iconWidth * 0.4) + 'px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(
+            member.gender === 'male' ? '👨' : '👩',
+            node.x,
+            iconY + iconHeight / 2
+          );
+        }
+        
+        // 绘制姓名
+        ctx.fillStyle = '#3E2723';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(
+          member.name,
+          node.x,
+          node.y + 35
+        );
+        
+        // 绘制出生日期
+        if (member.birthDate) {
+          const birthYear = new Date(member.birthDate).getFullYear();
+          let deathYear = '';
+          
+          if (member.deathDate) {
+            deathYear = ' - ' + new Date(member.deathDate).getFullYear();
+          }
+          
+          ctx.fillStyle = '#666666';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(
+            birthYear + deathYear,
+            node.x,
+            node.y + 55
+          );
+        }
+      });
+      
+      ctx.restore();
+    }
+    
+    // 缩放功能
+    function zoomIn() {
+      scale *= 1.2;
+      updateZoom();
+    }
+    
+    function zoomOut() {
+      scale /= 1.2;
+      updateZoom();
+    }
+    
+    function resetZoom() {
+      scale = 1;
+      offsetX = 0;
+      offsetY = 0;
+      updateZoom();
+    }
+    
+    function updateZoom() {
+      document.getElementById('zoomLevel').textContent = `${Math.round(scale * 100)}%`;
+      renderFamilyTree();
+    }
+    
+    // 拖拽功能
+    function startDrag(e) {
+      isDragging = true;
+      dragStartX = e.clientX - offsetX;
+      dragStartY = e.clientY - offsetY;
+    }
+    
+    function drag(e) {
+      if (!isDragging) return;
+      offsetX = e.clientX - dragStartX;
+      offsetY = e.clientY - dragStartY;
+      renderFamilyTree();
+    }
+    
+    function endDrag() {
+      isDragging = false;
+    }
+    
+    // 鼠标滚轮缩放
+    function zoom(e) {
+      e.preventDefault();
+      const zoomIntensity = 0.1;
+      const delta = e.deltaY > 0 ? -zoomIntensity : zoomIntensity;
+      scale *= (1 + delta);
+      updateZoom();
+    }
+    
+    // 触摸事件处理
+    function handleTouchStart(e) {
+      if (e.touches.length === 1) {
+        isDragging = true;
+        dragStartX = e.touches[0].clientX - offsetX;
+        dragStartY = e.touches[0].clientY - offsetY;
+      }
+    }
+    
+    function handleTouchMove(e) {
+      if (!isDragging || e.touches.length !== 1) return;
+      offsetX = e.touches[0].clientX - dragStartX;
+      offsetY = e.touches[0].clientY - dragStartY;
+      renderFamilyTree();
+    }
+    
+    function handleTouchEnd() {
+      isDragging = false;
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('=== 页面加载完成，开始加载分享数据 ===');
+      loadShareData();
+    });
+  </script>
+</body>
+</html>
