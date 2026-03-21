@@ -742,8 +742,11 @@ def create_share():
         # 根据环境自动切换域名
         import os
         # 检查是否在Vercel环境（生产环境）
-        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None
-        if is_vercel:
+        # Vercel会自动设置这些环境变量
+        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None or os.environ.get('VERCEL_REGION') is not None
+        # 强制使用生产环境URL（用于调试）
+        force_production = True
+        if is_vercel or force_production:
             # 生产环境
             share_url = f"https://terrytyh.github.io/family-tree-app/web/preview.html?code={share_code}"
         else:
@@ -786,8 +789,11 @@ def get_user_shares():
         # 为每个分享生成链接
         import os
         # 检查是否在Vercel环境（生产环境）
-        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None
-        if is_vercel:
+        # Vercel会自动设置这些环境变量
+        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None or os.environ.get('VERCEL_REGION') is not None
+        # 强制使用生产环境URL（用于调试）
+        force_production = True
+        if is_vercel or force_production:
             # 生产环境
             base_url = "https://terrytyh.github.io/family-tree-app/web/preview.html"
         else:
