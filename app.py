@@ -741,13 +741,14 @@ def create_share():
         # 生成分享链接
         # 根据环境自动切换域名
         import os
-        host = os.environ.get('HOST', 'localhost')
-        if host == 'localhost' or '127.0.0.1' in host:
-            # 本地环境
-            share_url = f"http://127.0.0.1:8000/web/preview.html?code={share_code}"
-        else:
+        # 检查是否在Vercel环境（生产环境）
+        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None
+        if is_vercel:
             # 生产环境
             share_url = f"https://terrytyh.github.io/family-tree-app/web/preview.html?code={share_code}"
+        else:
+            # 本地环境
+            share_url = f"http://127.0.0.1:8000/web/preview.html?code={share_code}"
         
         # 生成二维码
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -784,13 +785,14 @@ def get_user_shares():
         
         # 为每个分享生成链接
         import os
-        host = os.environ.get('HOST', 'localhost')
-        if host == 'localhost' or '127.0.0.1' in host:
-            # 本地环境
-            base_url = "http://127.0.0.1:8000/web/preview.html"
-        else:
+        # 检查是否在Vercel环境（生产环境）
+        is_vercel = os.environ.get('VERCEL') == '1' or os.environ.get('VERCEL_URL') is not None
+        if is_vercel:
             # 生产环境
             base_url = "https://terrytyh.github.io/family-tree-app/web/preview.html"
+        else:
+            # 本地环境
+            base_url = "http://127.0.0.1:8000/web/preview.html"
         
         for share in shares:
             share['share_url'] = f"{base_url}?code={share['share_code']}"
