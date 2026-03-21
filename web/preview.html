@@ -100,7 +100,7 @@
     
     .zoom-controls {
       position: absolute;
-      bottom: 20px;
+      bottom: 80px;
       right: 20px;
       z-index: 10;
     }
@@ -173,8 +173,8 @@
 
   <!-- 主要内容区域 -->
   <main class="flex-1 flex flex-col md:flex-row">
-    <!-- 左侧控制面板 -->
-    <aside id="sidePanel" class="side-panel panel-transition w-full md:w-80 bg-white shadow-lg md:shadow-none z-10 md:z-0">
+    <!-- 左侧控制面板 (手机端默认隐藏) -->
+    <aside id="sidePanel" class="side-panel panel-transition w-full md:w-80 bg-white shadow-lg md:shadow-none z-10 md:z-0 fixed md:static inset-y-0 left-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out">
       <div class="p-4 border-b border-gray-200">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold text-primary">家族成员</h2>
@@ -233,24 +233,23 @@
     
     <!-- 右侧家族树视图 -->
     <div class="flex-1 flex flex-col">
-      <div class="bg-white shadow-sm p-3 flex items-center justify-between">
-        <div class="flex items-center space-x-4">
-          <button id="togglePanelBtn" class="md:hidden text-primary hover:text-accent focus:outline-none">
+      <div class="bg-white shadow-sm px-3 py-2 flex items-center justify-center">
+        <div class="flex items-center space-x-2">
+          <!-- 隐藏手机端菜单按钮，因为右下角已有浮动按钮 -->
+          <button id="togglePanelBtn" class="hidden md:hidden text-primary hover:text-accent focus:outline-none">
             <i class="fa fa-bars"></i>
           </button>
           
-          <div class="flex items-center space-x-2">
-            <button id="zoomInBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
-              <i class="fa fa-search-plus"></i>
-            </button>
-            <span id="zoomLevel" class="text-sm font-medium">100%</span>
-            <button id="zoomOutBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
-              <i class="fa fa-search-minus"></i>
-            </button>
-            <button id="resetZoomBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
-              <i class="fa fa-arrows-alt"></i>
-            </button>
-          </div>
+          <button id="zoomInBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+            <i class="fa fa-search-plus"></i>
+          </button>
+          <span id="zoomLevel" class="text-sm font-medium">100%</span>
+          <button id="zoomOutBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+            <i class="fa fa-search-minus"></i>
+          </button>
+          <button id="resetZoomBtn" class="p-1 text-primary hover:text-accent focus:outline-none">
+            <i class="fa fa-arrows-alt"></i>
+          </button>
         </div>
       </div>
       
@@ -258,12 +257,20 @@
         <canvas id="familyCanvas"></canvas>
         <div id="nodeTooltip" class="node-tooltip"></div>
         
-        <div class="zoom-controls bg-white rounded-full shadow-md flex">
+        <!-- 缩放控制按钮 - 仅在PC端显示 -->
+        <div class="zoom-controls bg-white rounded-full shadow-md flex hidden md:flex">
           <button id="zoomInControl" class="w-10 h-10 flex items-center justify-center text-primary hover:bg-gray-100 rounded-l-full focus:outline-none">
             <i class="fa fa-plus"></i>
           </button>
           <button id="zoomOutControl" class="w-10 h-10 flex items-center justify-center text-primary hover:bg-gray-100 rounded-r-full focus:outline-none">
             <i class="fa fa-minus"></i>
+          </button>
+        </div>
+        
+        <!-- 手机端浮动按钮 -->
+        <div class="md:hidden fixed bottom-6 right-6 z-20">
+          <button id="mobileMembersBtn" class="w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-accent focus:outline-none">
+            <i class="fa fa-users text-xl"></i>
           </button>
         </div>
       </div>
@@ -545,15 +552,63 @@
         mobileMenu.classList.toggle('hidden');
       });
       
-      // 侧边栏切换
-      document.getElementById('togglePanelBtn').addEventListener('click', function() {
-        const sidePanel = document.getElementById('sidePanel');
-        sidePanel.classList.toggle('open');
-      });
+      // 侧边栏切换 - 仅在PC端使用
+      const togglePanelBtn = document.getElementById('togglePanelBtn');
+      if (togglePanelBtn) {
+        togglePanelBtn.addEventListener('click', function() {
+          const sidePanel = document.getElementById('sidePanel');
+          if (sidePanel.classList.contains('-translate-x-full')) {
+            sidePanel.classList.remove('-translate-x-full');
+            // 隐藏按钮
+            document.querySelector('.zoom-controls').classList.add('hidden');
+            const mobileMembersBtn = document.querySelector('#mobileMembersBtn');
+            if (mobileMembersBtn) {
+              mobileMembersBtn.parentElement.classList.add('hidden');
+            }
+          } else {
+            sidePanel.classList.add('-translate-x-full');
+            // 显示按钮
+            document.querySelector('.zoom-controls').classList.remove('hidden');
+            const mobileMembersBtn = document.querySelector('#mobileMembersBtn');
+            if (mobileMembersBtn) {
+              mobileMembersBtn.parentElement.classList.remove('hidden');
+            }
+          }
+        });
+      }
       
-      document.getElementById('closePanelBtn').addEventListener('click', function() {
-        document.getElementById('sidePanel').classList.remove('open');
-      });
+      // 关闭面板按钮
+      const closePanelBtn = document.getElementById('closePanelBtn');
+      if (closePanelBtn) {
+        closePanelBtn.addEventListener('click', function() {
+          document.getElementById('sidePanel').classList.add('-translate-x-full');
+          // 显示按钮
+          document.querySelector('.zoom-controls').classList.remove('hidden');
+          const mobileMembersBtn = document.querySelector('#mobileMembersBtn');
+          if (mobileMembersBtn) {
+            mobileMembersBtn.parentElement.classList.remove('hidden');
+          }
+        });
+      }
+      
+      // 手机端浮动按钮
+      const mobileMembersBtn = document.getElementById('mobileMembersBtn');
+      if (mobileMembersBtn) {
+        mobileMembersBtn.addEventListener('click', function() {
+          const sidePanel = document.getElementById('sidePanel');
+          if (sidePanel.classList.contains('-translate-x-full')) {
+            sidePanel.classList.remove('-translate-x-full');
+            // 隐藏按钮
+            document.querySelector('.zoom-controls').classList.add('hidden');
+            mobileMembersBtn.parentElement.classList.add('hidden');
+          } else {
+            sidePanel.classList.add('-translate-x-full');
+            // 显示按钮
+            document.querySelector('.zoom-controls').classList.remove('hidden');
+            mobileMembersBtn.parentElement.classList.remove('hidden');
+          }
+        });
+      }
       
       // 面板切换
       document.getElementById('closeDetailsBtn').addEventListener('click', showMembersPanel);
@@ -946,13 +1001,16 @@
     function calculateLayout() {
       if (nodes.length === 0) return;
       
-      const nodeWidth = 100;
-      const nodeHeight = 160;
-      const horizontalGap = 150;
-      const verticalGap = 250;
+      // 响应式配置
+      const isMobile = window.innerWidth < 768;
+      const nodeWidth = isMobile ? 80 : 100;
+      const nodeHeight = isMobile ? 120 : 160;
+      const horizontalGap = isMobile ? 100 : 150;
+      const verticalGap = isMobile ? 180 : 250;
       
       console.log('=== 开始计算布局 ===');
       console.log('节点数量:', nodes.length);
+      console.log('是否为手机端:', isMobile);
       
       // 简单的层级布局
       const levels = [];
@@ -985,7 +1043,7 @@
       
       // 计算每个节点的位置
       levels.forEach((levelNodes, levelIndex) => {
-        const levelY = 100 + levelIndex * verticalGap;
+        const levelY = 80 + levelIndex * verticalGap;
         const levelWidth = (levelNodes.length - 1) * (nodeWidth + horizontalGap);
         const startX = (canvas.width / 2) - (levelWidth / 2);
         
@@ -1116,8 +1174,9 @@
         if (!member) return;
         
         const isSelected = selectedMemberId === member.id;
-        const nodeWidth = 100;
-        const nodeHeight = 160;
+        const nodeWidth = node.width || 100;
+        const nodeHeight = node.height || 160;
+        const isMobile = window.innerWidth < 768;
         
         // 绘制节点背景
         ctx.fillStyle = member.gender === 'male' ? '#D2B48C' : '#FFD6B3';
@@ -1183,13 +1242,13 @@
         
         // 绘制姓名
         ctx.fillStyle = '#3E2723';
-        ctx.font = 'bold 14px Arial';
+        ctx.font = 'bold ' + (isMobile ? '12px' : '14px') + ' Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillText(
           member.name,
           node.x,
-          node.y + 35
+          node.y + 25
         );
         
         // 绘制出生日期
@@ -1202,13 +1261,13 @@
           }
           
           ctx.fillStyle = '#666666';
-          ctx.font = '12px Arial';
+          ctx.font = '10px Arial';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillText(
             birthYear + deathYear,
             node.x,
-            node.y + 55
+            node.y + 45
           );
         }
       });
@@ -1267,23 +1326,58 @@
     }
     
     // 触摸事件处理
+    let lastDistance = 0;
+    let touchStartDistance = 0;
+    let touchStartScale = 1;
+    
     function handleTouchStart(e) {
       if (e.touches.length === 1) {
         isDragging = true;
         dragStartX = e.touches[0].clientX - offsetX;
         dragStartY = e.touches[0].clientY - offsetY;
+      } else if (e.touches.length === 2) {
+        // 双指触摸，计算初始距离
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        touchStartDistance = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY
+        );
+        touchStartScale = scale;
       }
     }
     
     function handleTouchMove(e) {
-      if (!isDragging || e.touches.length !== 1) return;
-      offsetX = e.touches[0].clientX - dragStartX;
-      offsetY = e.touches[0].clientY - dragStartY;
-      renderFamilyTree();
+      e.preventDefault(); // 防止页面滚动
+      
+      if (e.touches.length === 1) {
+        // 单指拖动
+        if (!isDragging) return;
+        offsetX = e.touches[0].clientX - dragStartX;
+        offsetY = e.touches[0].clientY - dragStartY;
+        renderFamilyTree();
+      } else if (e.touches.length === 2) {
+        // 双指缩放
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const currentDistance = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY
+        );
+        
+        if (touchStartDistance > 0) {
+          const scaleFactor = currentDistance / touchStartDistance;
+          scale = touchStartScale * scaleFactor;
+          // 限制缩放范围
+          scale = Math.max(0.3, Math.min(3, scale));
+          updateZoom();
+        }
+      }
     }
     
     function handleTouchEnd() {
       isDragging = false;
+      touchStartDistance = 0;
     }
     
     // 页面加载完成后初始化

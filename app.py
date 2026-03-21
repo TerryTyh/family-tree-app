@@ -38,7 +38,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 app = Flask(__name__)
-CORS(app, origins=['https://terrytyh.github.io', 'http://localhost:8000', 'http://127.0.0.1:8000', 'http://localhost:8080', 'http://127.0.0.1:8080'], supports_credentials=True)
+# 允许所有本地开发环境（包括局域网IP）
+CORS(app, origins=['https://terrytyh.github.io', 
+                   'http://localhost:8000', 
+                   'http://127.0.0.1:8000', 
+                   'http://localhost:8080', 
+                   'http://127.0.0.1:8080',
+                   'http://192.168.1.103:8000',
+                   'http://192.168.1.103:8080',
+                   r'http://192\.168\.\d+\.\d+:8000',
+                   r'http://192\.168\.\d+\.\d+:8080'], 
+     supports_credentials=True)
 
 # Supabase配置
 import os
