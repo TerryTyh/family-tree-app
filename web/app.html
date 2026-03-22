@@ -2341,64 +2341,80 @@
     }
     
     // 计算单个连通分量的世代
+    // 新逻辑：以第一个成员为基准（层级0），计算所有成员的相对层级
     function calculateComponentGenerations(component) {
-      const generations = [];
+      if (component.length === 0) return [];
+      
+      // 使用Map存储每个成员的层级
+      const memberLevels = new Map();
       const visited = new Set();
       
-      if (component.length === 0) return generations;
+      // 以第一个成员为基准，层级为0
+      const baseMemberId = component[0];
+      memberLevels.set(baseMemberId, 0);
       
-      // 找到分量中最年长的一代作为起始点
-      // 最年长的定义：没有父母，或者有父母但父母不在当前分量中
-      let rootMembers = component.filter(memberId => {
+      // 使用队列进行广度优先搜索
+      const queue = [baseMemberId];
+      visited.add(baseMemberId);
+      
+      while (queue.length > 0) {
+        const memberId = queue.shift();
+        const currentLevel = memberLevels.get(memberId);
         const member = familyData.members.find(m => m.id === memberId);
-        // 检查该成员的父母是否在当前分量中
-        const fatherInComponent = member.fatherId && component.includes(member.fatherId);
-        const motherInComponent = member.motherId && component.includes(member.motherId);
-        // 如果父母都不在当前分量中，则该成员是根
-        return !fatherInComponent && !motherInComponent;
-      });
-      
-      // 如果没有找到根成员，使用分量的第一个成员
-      if (rootMembers.length === 0) {
-        rootMembers = [component[0]];
-      }
-      
-      // 从根成员开始，使用广度优先搜索计算世代
-      let currentGeneration = rootMembers;
-      currentGeneration.forEach(id => visited.add(id));
-      
-      while (currentGeneration.length > 0) {
-        generations.push(currentGeneration);
         
-        const nextGeneration = [];
-        
-        currentGeneration.forEach(memberId => {
-          const member = familyData.members.find(m => m.id === memberId);
-          
-          // 添加配偶到当前代（同一层级）
-          if (member.spouseIds) {
-            member.spouseIds.forEach(spouseId => {
-              if (!visited.has(spouseId) && component.includes(spouseId)) {
-                visited.add(spouseId);
-                currentGeneration.push(spouseId);
-              }
-            });
-          }
-          
-          // 添加子女到下一代
-          const children = getChildren(memberId);
-          children.forEach(childId => {
-            if (!visited.has(childId) && component.includes(childId)) {
-              visited.add(childId);
-              nextGeneration.push(childId);
+        // 处理配偶 - 同一层级
+        if (member.spouseIds) {
+          member.spouseIds.forEach(spouseId => {
+            if (component.includes(spouseId) && !visited.has(spouseId)) {
+              visited.add(spouseId);
+              memberLevels.set(spouseId, currentLevel);
+              queue.push(spouseId);
             }
           });
-        });
+        }
         
-        currentGeneration = nextGeneration;
+        // 处理父母 - 层级+1（上一代）
+        if (member.fatherId && component.includes(member.fatherId) && !visited.has(member.fatherId)) {
+          visited.add(member.fatherId);
+          memberLevels.set(member.fatherId, currentLevel + 1);
+          queue.push(member.fatherId);
+        }
+        if (member.motherId && component.includes(member.motherId) && !visited.has(member.motherId)) {
+          visited.add(member.motherId);
+          memberLevels.set(member.motherId, currentLevel + 1);
+          queue.push(member.motherId);
+        }
+        
+        // 处理子女 - 层级-1（下一代）
+        const children = getChildren(memberId);
+        children.forEach(childId => {
+          if (component.includes(childId) && !visited.has(childId)) {
+            visited.add(childId);
+            memberLevels.set(childId, currentLevel - 1);
+            queue.push(childId);
+          }
+        });
       }
       
-      return generations;
+      // 找出所有未访问的成员（可能是孤立节点），设置为层级0
+      component.forEach(memberId => {
+        if (!visited.has(memberId)) {
+          memberLevels.set(memberId, 0);
+        }
+      });
+      
+      // 按层级分组
+      const levelGroups = new Map();
+      memberLevels.forEach((level, memberId) => {
+        if (!levelGroups.has(level)) {
+          levelGroups.set(level, []);
+        }
+        levelGroups.get(level).push(memberId);
+      });
+      
+      // 转换为数组，按层级从高到低排序（祖父母在上，子女在下）
+      const sortedLevels = Array.from(levelGroups.keys()).sort((a, b) => b - a);
+      return sortedLevels.map(level => levelGroups.get(level));
     }
     
     // 计算世代
