@@ -925,14 +925,11 @@
       nodes = [];
       lines = [];
       
-      // 构建家族树结构
-      buildFamilyTree();
+      // 查找连通分量
+      const connectedComponents = findConnectedComponents();
       
-      // 计算布局
-      calculateLayout();
-      
-      // 计算连接线
-      calculateLines();
+      // 计算垂直布局
+      calculateVerticalLayout(connectedComponents);
       
       // 绘制连接线
       drawLines();
@@ -941,142 +938,215 @@
       drawNodes();
     }
     
-    // 构建家族树结构
-    function buildFamilyTree() {
-      // 找到所有没有父母的成员作为根节点
-      const rootNodes = familyData.members.filter(member => !member.fatherId && !member.motherId);
+    // 找到所有有相互关系的成员组（连通分量）
+    function findConnectedComponents() {
+      const visited = new Set();
+      const components = [];
       
-      console.log('=== 开始构建家族树 ===');
-      console.log('根节点数量:', rootNodes.length);
-      
-      // 为每个根节点构建家族树
-      rootNodes.forEach(rootMember => {
-        console.log('处理根节点:', rootMember.name);
-        if (!nodes.find(n => n.id === rootMember.id)) {
-          buildFamilyTreeRecursive(rootMember);
-        }
-      });
-      
-      // 确保所有成员都被添加到nodes中
+      // 为每个未访问的成员查找其连通分量
       familyData.members.forEach(member => {
-        if (!nodes.find(n => n.id === member.id)) {
-          console.log('添加未处理的成员:', member.name);
-          buildFamilyTreeRecursive(member);
+        if (!visited.has(member.id)) {
+          const component = [];
+          const queue = [member.id];
+          visited.add(member.id);
+          
+          while (queue.length > 0) {
+            const currentId = queue.shift();
+            component.push(currentId);
+            
+            const currentMember = familyData.members.find(m => m.id === currentId);
+            if (!currentMember) continue;
+            
+            // 添加所有相关成员（父母、配偶、子女）
+            const relatedIds = new Set();
+            
+            // 父母
+            if (currentMember.fatherId) relatedIds.add(currentMember.fatherId);
+            if (currentMember.motherId) relatedIds.add(currentMember.motherId);
+            
+            // 配偶
+            if (currentMember.spouseIds) {
+              currentMember.spouseIds.forEach(id => relatedIds.add(id));
+            }
+            
+            // 子女
+            const children = getChildren(currentId);
+            children.forEach(id => relatedIds.add(id));
+            
+            // 添加未访问的相关成员到队列
+            relatedIds.forEach(id => {
+              if (!visited.has(id)) {
+                visited.add(id);
+                queue.push(id);
+              }
+            });
+          }
+          
+          components.push(component);
         }
       });
       
-      console.log('总节点数量:', nodes.length);
+      return components;
     }
     
-    // 递归构建家族树
-    function buildFamilyTreeRecursive(member) {
-      // 检查是否已经添加
-      if (nodes.find(n => n.id === member.id)) {
-        return;
+    // 计算单个连通分量的世代
+    // 新逻辑：以rootMemberId或第一个成员为基准（层级0），计算所有成员的相对层级
+    function calculateComponentGenerations(component) {
+      if (component.length === 0) return [];
+      
+      // 使用Map存储每个成员的层级
+      const memberLevels = new Map();
+      const visited = new Set();
+      
+      // 以rootMemberId或第一个成员为基准，层级为0
+      let baseMemberId = familyData.rootMemberId;
+      // 如果rootMemberId为null或不在当前分量中，使用分量的第一个成员
+      if (!baseMemberId || !component.includes(baseMemberId)) {
+        baseMemberId = component[0];
       }
+      memberLevels.set(baseMemberId, 0);
       
-      // 添加当前节点
-      nodes.push({
-        id: member.id,
-        name: member.name
-      });
+      // 使用队列进行广度优先搜索
+      const queue = [baseMemberId];
+      visited.add(baseMemberId);
       
-      console.log('  添加节点:', member.name);
-      
-      // 添加配偶
-      if (member.spouseIds) {
-        member.spouseIds.forEach(spouseId => {
-          const spouse = familyData.members.find(m => m.id === spouseId);
-          if (spouse) {
-            buildFamilyTreeRecursive(spouse);
+      while (queue.length > 0) {
+        const memberId = queue.shift();
+        const currentLevel = memberLevels.get(memberId);
+        const member = familyData.members.find(m => m.id === memberId);
+        if (!member) continue;
+        
+        // 处理配偶 - 同一层级
+        if (member.spouseIds) {
+          member.spouseIds.forEach(spouseId => {
+            if (component.includes(spouseId) && !visited.has(spouseId)) {
+              visited.add(spouseId);
+              memberLevels.set(spouseId, currentLevel);
+              queue.push(spouseId);
+            }
+          });
+        }
+        
+        // 处理父母 - 层级+1（上一代）
+        if (member.fatherId && component.includes(member.fatherId) && !visited.has(member.fatherId)) {
+          visited.add(member.fatherId);
+          memberLevels.set(member.fatherId, currentLevel + 1);
+          queue.push(member.fatherId);
+        }
+        if (member.motherId && component.includes(member.motherId) && !visited.has(member.motherId)) {
+          visited.add(member.motherId);
+          memberLevels.set(member.motherId, currentLevel + 1);
+          queue.push(member.motherId);
+        }
+        
+        // 处理子女 - 层级-1（下一代）
+        const children = getChildren(memberId);
+        children.forEach(childId => {
+          if (component.includes(childId) && !visited.has(childId)) {
+            visited.add(childId);
+            memberLevels.set(childId, currentLevel - 1);
+            queue.push(childId);
           }
         });
       }
       
-      // 添加子女
-      const children = getChildren(member.id);
-      children.forEach(childId => {
-        const child = familyData.members.find(m => m.id === childId);
-        if (child) {
-          buildFamilyTreeRecursive(child);
+      // 找出所有未访问的成员（可能是孤立节点），设置为层级0
+      component.forEach(memberId => {
+        if (!visited.has(memberId)) {
+          memberLevels.set(memberId, 0);
         }
       });
+      
+      // 按层级分组
+      const levelGroups = new Map();
+      memberLevels.forEach((level, memberId) => {
+        if (!levelGroups.has(level)) {
+          levelGroups.set(level, []);
+        }
+        levelGroups.get(level).push(memberId);
+      });
+      
+      // 转换为数组，按层级从高到低排序（祖父母在上，子女在下）
+      const sortedLevels = Array.from(levelGroups.keys()).sort((a, b) => b - a);
+      return sortedLevels.map(level => levelGroups.get(level));
     }
     
-    // 计算布局
-    function calculateLayout() {
-      if (nodes.length === 0) return;
+    // 计算垂直布局
+    function calculateVerticalLayout(connectedComponents) {
+      if (!connectedComponents || connectedComponents.length === 0) return;
       
       // 响应式配置
       const isMobile = window.innerWidth < 768;
       const nodeWidth = isMobile ? 80 : 100;
       const nodeHeight = isMobile ? 120 : 160;
-      const horizontalGap = isMobile ? 100 : 150;
-      const verticalGap = isMobile ? 180 : 250;
+      const horizontalSpacing = isMobile ? 100 : 200;
+      const verticalSpacing = isMobile ? 180 : 250;
+      const componentSpacing = isMobile ? 100 : 200; // 不同家族组之间的间距
       
-      console.log('=== 开始计算布局 ===');
-      console.log('节点数量:', nodes.length);
-      console.log('是否为手机端:', isMobile);
+      let totalHeight = 0;
+      let maxWidth = 0;
       
-      // 简单的层级布局
-      const levels = [];
-      
-      // 计算每个节点的层级
-      nodes.forEach(node => {
-        let level = 0;
-        let currentMember = familyData.members.find(m => m.id === node.id);
+      // 计算每个连通分量的布局
+      const componentLayouts = connectedComponents.map(component => {
+        // 计算这个分量的世代
+        const generations = calculateComponentGenerations(component);
         
-        // 找到最高层级的祖先
-        while (true) {
-          const parent = familyData.members.find(m => {
-            return m.id === currentMember.fatherId || m.id === currentMember.motherId;
+        // 计算这个分量的宽度和高度
+        const width = Math.max(...generations.map(gen => gen.length)) * horizontalSpacing;
+        const height = generations.length * verticalSpacing;
+        
+        totalHeight += height;
+        maxWidth = Math.max(maxWidth, width);
+        
+        return {
+          generations,
+          width,
+          height
+        };
+      });
+      
+      // 计算起始位置，使所有分量居中
+      // 确保起始位置至少为50，避免节点被绘制在画布上方
+      const startY = Math.max(50, (canvas.height - totalHeight - (connectedComponents.length - 1) * componentSpacing) / 2);
+      const centerX = canvas.width / 2;
+      
+      let currentY = startY;
+      
+      // 为每个分量放置节点
+      connectedComponents.forEach((component, componentIndex) => {
+        const layout = componentLayouts[componentIndex];
+        const generations = layout.generations;
+        
+        generations.forEach((generation, genIndex) => {
+          const y = currentY + genIndex * verticalSpacing;
+          const genCenterX = centerX - (generation.length - 1) * horizontalSpacing / 2;
+          
+          generation.forEach((memberId, index) => {
+            const x = genCenterX + index * horizontalSpacing;
+            
+            nodes.push({
+              id: memberId,
+              x: x,
+              y: y,
+              width: nodeWidth,
+              height: nodeHeight
+            });
           });
-          
-          if (!parent) break;
-          
-          level++;
-          currentMember = parent;
-        }
-        
-        if (!levels[level]) {
-          levels[level] = [];
-        }
-        
-        levels[level].push(node);
-      });
-      
-      console.log('层级数量:', levels.length);
-      
-      // 计算每个节点的位置
-      levels.forEach((levelNodes, levelIndex) => {
-        const levelY = 80 + levelIndex * verticalGap;
-        const levelWidth = (levelNodes.length - 1) * (nodeWidth + horizontalGap);
-        const startX = (canvas.width / 2) - (levelWidth / 2);
-        
-        console.log('层级', levelIndex, 'Y位置:', levelY, '节点数量:', levelNodes.length);
-        
-        levelNodes.forEach((node, nodeIndex) => {
-          node.x = startX + nodeIndex * (nodeWidth + horizontalGap) + nodeWidth / 2;
-          node.y = levelY + nodeHeight / 2;
-          node.width = nodeWidth;
-          node.height = nodeHeight;
-          
-          console.log('  节点:', node.name, '位置:', node.x, node.y, '尺寸:', node.width, node.height);
         });
+        
+        currentY += layout.height + componentSpacing;
       });
+      
+      // 计算连接线
+      calculateLines();
     }
     
     // 计算连接线
     function calculateLines() {
       lines = [];
       
-      console.log('=== 开始计算连接线 ===');
-      console.log('节点数量:', nodes.length);
-      
       nodes.forEach(node => {
         const member = familyData.members.find(m => m.id === node.id);
-        
-        console.log('处理节点:', member.name, '位置:', node.x, node.y, '尺寸:', node.width, node.height);
         
         // 连接到配偶
         if (member.spouseIds) {
@@ -1085,22 +1155,15 @@
             if (member.id < spouseId) {
               const spouseNode = nodes.find(n => n.id === spouseId);
               if (spouseNode) {
-                console.log('  配偶:', spouseNode.name, '位置:', spouseNode.x, spouseNode.y, '尺寸:', spouseNode.width, spouseNode.height);
-                // 卡片左上角坐标
-                const nodeLeft = node.x - node.width / 2;
-                const nodeTop = node.y - node.height / 2;
-                const spouseLeft = spouseNode.x - spouseNode.width / 2;
-                const spouseTop = spouseNode.y - spouseNode.height / 2;
-                
                 lines.push({
                   type: 'marriage',
                   from: {
-                    x: nodeLeft + node.width,
-                    y: node.y  // 卡片右侧中间
+                    x: node.x + node.width / 2, // 卡片右侧中间
+                    y: node.y
                   },
                   to: {
-                    x: spouseLeft,
-                    y: spouseNode.y  // 卡片左侧中间
+                    x: spouseNode.x - spouseNode.width / 2, // 卡片左侧中间
+                    y: spouseNode.y
                   },
                   memberId: member.id,
                   relatedId: spouseId
@@ -1115,22 +1178,15 @@
         children.forEach(childId => {
           const childNode = nodes.find(n => n.id === childId);
           if (childNode) {
-            console.log('  子女:', childNode.name, '位置:', childNode.x, childNode.y, '尺寸:', childNode.width, childNode.height);
-            // 卡片左上角坐标
-            const nodeLeft = node.x - node.width / 2;
-            const nodeTop = node.y - node.height / 2;
-            const childLeft = childNode.x - childNode.width / 2;
-            const childTop = childNode.y - childNode.height / 2;
-            
             lines.push({
               type: 'parent',
               from: {
-                x: node.x,  // 卡片底部中间
-                y: nodeTop + node.height
+                x: node.x, // 卡片底部中间
+                y: node.y + node.height / 2
               },
               to: {
-                x: childNode.x,  // 卡片顶部中间
-                y: childTop
+                x: childNode.x, // 卡片顶部中间
+                y: childNode.y - childNode.height / 2
               },
               memberId: member.id,
               relatedId: childId
@@ -1138,8 +1194,6 @@
           }
         });
       });
-      
-      console.log('连接线数量:', lines.length);
     }
     
     // 绘制连接线
@@ -1304,17 +1358,58 @@
       renderFamilyTree();
     }
     
+    // 获取指定位置的节点
+    function getNodeAtPosition(x, y) {
+      // 将屏幕坐标转换为画布坐标
+      const canvasX = (x - offsetX) / scale;
+      const canvasY = (y - offsetY) / scale;
+      
+      // 检查是否点击了节点
+      for (const node of nodes) {
+        if (
+          canvasX >= node.x &&
+          canvasX <= node.x + node.width &&
+          canvasY >= node.y &&
+          canvasY <= node.y + node.height
+        ) {
+          return node;
+        }
+      }
+      
+      return null;
+    }
+    
     // 拖拽功能
     function startDrag(e) {
-      isDragging = true;
-      dragStartX = e.clientX - offsetX;
-      dragStartY = e.clientY - offsetY;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // 检查是否点击了节点
+      const clickedNode = getNodeAtPosition(mouseX, mouseY);
+      
+      if (clickedNode) {
+        // 点击了节点，显示详情
+        selectedMemberId = clickedNode.id;
+        renderFamilyTree();
+        showMemberDetails(clickedNode.id);
+      } else {
+        // 点击了空白区域，开始拖拽画布
+        isDragging = true;
+        dragStartX = mouseX - offsetX;
+        dragStartY = mouseY - offsetY;
+      }
     }
     
     function drag(e) {
       if (!isDragging) return;
-      offsetX = e.clientX - dragStartX;
-      offsetY = e.clientY - dragStartY;
+      
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      offsetX = mouseX - dragStartX;
+      offsetY = mouseY - dragStartY;
       renderFamilyTree();
     }
     
