@@ -182,6 +182,11 @@
         return 'http://127.0.0.1:5001';
       }
       
+      // 国内域名 - 使用国内 API 域名
+      if (hostname.includes('ywt.world')) {
+        return 'https://zupu-api.ywt.world';
+      }
+      
       // GitHub Pages或其他生产环境
       return 'https://family-tree-app-lake.vercel.app';
     };
