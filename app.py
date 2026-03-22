@@ -740,7 +740,7 @@ def create_share():
         share = result.data[0]
         
         # 生成分享链接
-        # 根据环境自动切换域名
+        # 根据环境自动切换前端域名
         import os
         # 检查是否在Vercel环境（生产环境）
         # Vercel会自动设置这些环境变量
@@ -748,8 +748,8 @@ def create_share():
         # 强制使用生产环境URL（用于调试）
         force_production = True
         if is_vercel or force_production:
-            # 生产环境
-            share_url = f"https://terrytyh.github.io/family-tree-app/web/preview.html?code={share_code}"
+            # 生产环境 - 使用国内域名
+            share_url = f"https://zupu.ywt.world/web/preview.html?code={share_code}"
         else:
             # 本地环境
             share_url = f"http://127.0.0.1:8000/web/preview.html?code={share_code}"
@@ -795,8 +795,8 @@ def get_user_shares():
         # 强制使用生产环境URL（用于调试）
         force_production = True
         if is_vercel or force_production:
-            # 生产环境
-            base_url = "https://terrytyh.github.io/family-tree-app/web/preview.html"
+            # 生产环境 - 使用国内域名
+            base_url = "https://zupu.ywt.world/web/preview.html"
         else:
             # 本地环境
             base_url = "http://127.0.0.1:8000/web/preview.html"
