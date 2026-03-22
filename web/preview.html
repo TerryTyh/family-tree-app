@@ -1438,9 +1438,24 @@
     
     function handleTouchStart(e) {
       if (e.touches.length === 1) {
-        isDragging = true;
-        dragStartX = e.touches[0].clientX - offsetX;
-        dragStartY = e.touches[0].clientY - offsetY;
+        const rect = canvas.getBoundingClientRect();
+        const touchX = e.touches[0].clientX - rect.left;
+        const touchY = e.touches[0].clientY - rect.top;
+        
+        // 检查是否点击了节点
+        const clickedNode = getNodeAtPosition(touchX, touchY);
+        
+        if (clickedNode) {
+          // 点击了节点，显示详情
+          selectedMemberId = clickedNode.id;
+          renderFamilyTree();
+          showMemberDetails(clickedNode.id);
+        } else {
+          // 点击了空白区域，开始拖拽画布
+          isDragging = true;
+          dragStartX = touchX - offsetX;
+          dragStartY = touchY - offsetY;
+        }
       } else if (e.touches.length === 2) {
         // 双指触摸，计算初始距离
         const touch1 = e.touches[0];
