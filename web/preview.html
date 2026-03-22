@@ -928,6 +928,11 @@
       // 查找连通分量
       const connectedComponents = findConnectedComponents();
       
+      // 如果没有根成员但有成员，设置第一个连通分量的第一个成员为根成员
+      if (!familyData.rootMemberId && connectedComponents.length > 0) {
+        familyData.rootMemberId = connectedComponents[0][0];
+      }
+      
       // 计算垂直布局
       calculateVerticalLayout(connectedComponents);
       
