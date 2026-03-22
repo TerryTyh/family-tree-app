@@ -2104,7 +2104,8 @@
       });
       
       // 计算起始位置，使所有分量居中
-      const startY = (canvas.height - totalHeight - (connectedComponents.length - 1) * componentSpacing) / 2;
+      // 确保起始位置至少为50，避免节点被绘制在画布上方
+      const startY = Math.max(50, (canvas.height - totalHeight - (connectedComponents.length - 1) * componentSpacing) / 2);
       const centerX = canvas.width / 2;
       
       let currentY = startY;
