@@ -2080,6 +2080,7 @@
       const horizontalSpacing = 200;
       const verticalSpacing = 250;
       const componentSpacing = 200; // 不同家族组之间的间距
+      const topPadding = 100; // 顶部留白
       
       let totalHeight = 0;
       let maxWidth = 0;
@@ -2103,8 +2104,16 @@
         };
       });
       
-      // 计算起始位置，使所有分量居中
-      const startY = (canvas.height - totalHeight - (connectedComponents.length - 1) * componentSpacing) / 2;
+      // 计算所需的总高度（包括间距和顶部留白）
+      const requiredHeight = totalHeight + (connectedComponents.length - 1) * componentSpacing + topPadding * 2;
+      
+      // 如果所需高度超过画布高度，扩展画布
+      if (requiredHeight > canvas.height) {
+        canvas.height = requiredHeight;
+      }
+      
+      // 计算起始位置，使所有分量居中，但至少保留顶部留白
+      const startY = Math.max(topPadding, (canvas.height - totalHeight - (connectedComponents.length - 1) * componentSpacing) / 2);
       const centerX = canvas.width / 2;
       
       let currentY = startY;
