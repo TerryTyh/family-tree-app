@@ -2370,7 +2370,17 @@
         currentGeneration.forEach(memberId => {
           const member = familyData.members.find(m => m.id === memberId);
           
-          // 添加子女
+          // 添加配偶到当前代（同一层级）
+          if (member.spouseIds) {
+            member.spouseIds.forEach(spouseId => {
+              if (!visited.has(spouseId) && component.includes(spouseId)) {
+                visited.add(spouseId);
+                currentGeneration.push(spouseId);
+              }
+            });
+          }
+          
+          // 添加子女到下一代
           const children = getChildren(memberId);
           children.forEach(childId => {
             if (!visited.has(childId) && component.includes(childId)) {
@@ -2378,16 +2388,6 @@
               nextGeneration.push(childId);
             }
           });
-          
-          // 添加配偶
-          if (member.spouseIds) {
-            member.spouseIds.forEach(spouseId => {
-              if (!visited.has(spouseId) && component.includes(spouseId)) {
-                visited.add(spouseId);
-                nextGeneration.push(spouseId);
-              }
-            });
-          }
         });
         
         currentGeneration = nextGeneration;
