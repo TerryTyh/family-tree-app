@@ -1435,27 +1435,21 @@
     let lastDistance = 0;
     let touchStartDistance = 0;
     let touchStartScale = 1;
+    let touchStartTime = 0;
+    let isTap = false;
     
     function handleTouchStart(e) {
+      touchStartTime = Date.now();
+      isTap = true;
+      
       if (e.touches.length === 1) {
         const rect = canvas.getBoundingClientRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
         
-        // 检查是否点击了节点
-        const clickedNode = getNodeAtPosition(touchX, touchY);
-        
-        if (clickedNode) {
-          // 点击了节点，显示详情
-          selectedMemberId = clickedNode.id;
-          renderFamilyTree();
-          showMemberDetails(clickedNode.id);
-        } else {
-          // 点击了空白区域，开始拖拽画布
-          isDragging = true;
-          dragStartX = touchX - offsetX;
-          dragStartY = touchY - offsetY;
-        }
+        // 存储初始触摸位置
+        dragStartX = e.touches[0].clientX - offsetX;
+        dragStartY = e.touches[0].clientY - offsetY;
       } else if (e.touches.length === 2) {
         // 双指触摸，计算初始距离
         const touch1 = e.touches[0];
@@ -1471,14 +1465,27 @@
     function handleTouchMove(e) {
       e.preventDefault(); // 防止页面滚动
       
+      // 如果移动距离超过10px，认为是拖拽而不是点击
       if (e.touches.length === 1) {
-        // 单指拖动
-        if (!isDragging) return;
-        offsetX = e.touches[0].clientX - dragStartX;
-        offsetY = e.touches[0].clientY - dragStartY;
-        renderFamilyTree();
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        const distance = Math.hypot(touchX - (dragStartX + offsetX), touchY - (dragStartY + offsetY));
+        
+        if (distance > 10) {
+          isTap = false;
+          isDragging = true;
+          
+          // 节流：每16ms渲染一次（约60fps）
+          if (!this.lastRenderTime || Date.now() - this.lastRenderTime > 16) {
+            offsetX = touchX - dragStartX;
+            offsetY = touchY - dragStartY;
+            renderFamilyTree();
+            this.lastRenderTime = Date.now();
+          }
+        }
       } else if (e.touches.length === 2) {
         // 双指缩放
+        isTap = false;
         const touch1 = e.touches[0];
         const touch2 = e.touches[1];
         const currentDistance = Math.hypot(
@@ -1496,8 +1503,23 @@
       }
     }
     
-    function handleTouchEnd() {
+    function handleTouchEnd(e) {
+      // 如果是点击（触摸时间短且移动距离小）
+      if (isTap && Date.now() - touchStartTime < 300) {
+        const rect = canvas.getBoundingClientRect();
+        const touchX = e.changedTouches[0].clientX - rect.left;
+        const touchY = e.changedTouches[0].clientY - rect.top;
+        
+        // 检查是否点击了节点
+        const clickedNode = getNodeAtPosition(touchX, touchY);
+        if (clickedNode) {
+          // 点击了节点，显示详情
+          showMemberDetails(clickedNode.id);
+        }
+      }
+      
       isDragging = false;
+      isTap = false;
       touchStartDistance = 0;
     }
     
