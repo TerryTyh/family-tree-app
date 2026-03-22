@@ -556,6 +556,12 @@
         return 'http://127.0.0.1:5001';
       }
       
+      // 国内域名 - 使用国内 API 域名
+      // 请将 yourdomain.com 替换为您的实际域名
+      if (hostname.includes('yourdomain.com')) {
+        return 'https://api.yourdomain.com';
+      }
+      
       // GitHub Pages或其他生产环境
       return 'https://family-tree-app-lake.vercel.app';
     };
