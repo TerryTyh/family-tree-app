@@ -2347,10 +2347,15 @@
       
       if (component.length === 0) return generations;
       
-      // 找到分量中最年长的一代作为起始点（没有父母的成员）
+      // 找到分量中最年长的一代作为起始点
+      // 最年长的定义：没有父母，或者有父母但父母不在当前分量中
       let rootMembers = component.filter(memberId => {
         const member = familyData.members.find(m => m.id === memberId);
-        return !member.fatherId && !member.motherId;
+        // 检查该成员的父母是否在当前分量中
+        const fatherInComponent = member.fatherId && component.includes(member.fatherId);
+        const motherInComponent = member.motherId && component.includes(member.motherId);
+        // 如果父母都不在当前分量中，则该成员是根
+        return !fatherInComponent && !motherInComponent;
       });
       
       // 如果没有找到根成员，使用分量的第一个成员
