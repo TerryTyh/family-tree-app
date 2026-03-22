@@ -40,6 +40,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 app = Flask(__name__)
 # 允许所有本地开发环境（包括局域网IP）
 CORS(app, origins=['https://terrytyh.github.io', 
+                   'https://zupu.ywt.world',
                    'http://localhost:8000', 
                    'http://127.0.0.1:8000', 
                    'http://localhost:8080', 
