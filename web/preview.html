@@ -838,6 +838,21 @@
       document.getElementById('memberDetailsContent').innerHTML = detailsHTML;
       document.getElementById('membersPanel').classList.add('hidden');
       document.getElementById('memberDetailsPanel').classList.remove('hidden');
+      
+      // 在H5端，需要显示sidePanel
+      const sidePanel = document.getElementById('sidePanel');
+      if (sidePanel && sidePanel.classList.contains('-translate-x-full')) {
+        sidePanel.classList.remove('-translate-x-full');
+        // 隐藏浮标和缩放控制
+        const mobileMembersBtn = document.getElementById('mobileMembersBtn');
+        if (mobileMembersBtn) {
+          mobileMembersBtn.parentElement.classList.add('hidden');
+        }
+        const zoomControls = document.querySelector('.zoom-controls');
+        if (zoomControls) {
+          zoomControls.classList.add('hidden');
+        }
+      }
     }
     
     // 格式化日期
@@ -1446,6 +1461,14 @@
         const rect = canvas.getBoundingClientRect();
         const touchX = e.touches[0].clientX - rect.left;
         const touchY = e.touches[0].clientY - rect.top;
+        
+        // 检查是否点击了节点，添加触摸反馈
+        const clickedNode = getNodeAtPosition(touchX, touchY);
+        if (clickedNode) {
+          // 立即更新选中状态并重新渲染，提供触摸反馈
+          selectedMemberId = clickedNode.id;
+          renderFamilyTree();
+        }
         
         // 存储初始触摸位置
         dragStartX = e.touches[0].clientX - offsetX;
